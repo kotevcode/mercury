@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="Mercury" width="128" height="128" />
+  <img src="assets/logo.svg" alt="Mercury" width="200" height="200" />
 </p>
 
 # Mercury
