@@ -406,7 +406,8 @@ function checkCommandExists(cmd: string): boolean {
 }
 
 function generateSystemdService(userMode: boolean): string {
-  const mercuryBin = process.argv[1];
+  const bunPath = process.execPath;
+  const mercuryScript = process.argv[1];
   const workDir = CWD;
 
   return `[Unit]
@@ -415,7 +416,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=${mercuryBin} run
+ExecStart=${bunPath} run ${mercuryScript} run
 WorkingDirectory=${workDir}
 Restart=on-failure
 RestartSec=10
@@ -426,7 +427,8 @@ WantedBy=${userMode ? "default.target" : "multi-user.target"}
 }
 
 function generateLaunchdPlist(): string {
-  const mercuryBin = process.argv[1];
+  const bunPath = process.execPath;
+  const mercuryScript = process.argv[1];
   const workDir = CWD;
   const { logDir } = getServicePaths();
 
@@ -438,7 +440,9 @@ function generateLaunchdPlist(): string {
   <string>${LAUNCHD_LABEL}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${mercuryBin}</string>
+    <string>${bunPath}</string>
+    <string>run</string>
+    <string>${mercuryScript}</string>
     <string>run</string>
   </array>
   <key>WorkingDirectory</key>
