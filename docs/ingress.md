@@ -175,11 +175,13 @@ User A: @Mercury can you check the API logs?
    - `<platform>CallerId(message)` — build caller ID
    - `create<Platform>MessageHandler({ core, db, config })` — message handler with pre-route trigger check
 
-2. Wire into `src/chat-sdk.ts`:
-   - Add adapter creation in the adapters block
-   - Create platform-specific handler
-   - Add `if (thread.adapter.name === "<platform>")` branch early in `handleMessage`
+2. Add adapter to `src/adapters/setup.ts`:
+   - Add env var check and adapter creation
 
-3. Add tests in `tests/<platform>-adapter.test.ts`
+3. Wire into `src/main.ts`:
+   - Create platform-specific handler
+   - Add `if (thread.adapter.name === "<platform>")` branch in `handleMessage`
+
+4. Add tests in `tests/<platform>-adapter.test.ts`
 
 Follow the Slack adapter (`src/adapters/slack.ts`) as the reference implementation — it's the simplest.

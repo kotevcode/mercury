@@ -190,7 +190,7 @@ async function runAction(): Promise<void> {
 
   console.log("🪽 Starting mercury...\n");
 
-  const entryPoint = join(PACKAGE_ROOT, "src/chat-sdk.ts");
+  const entryPoint = join(PACKAGE_ROOT, "src/main.ts");
 
   const child = spawn("bun", ["run", entryPoint], {
     stdio: "inherit",

@@ -29,58 +29,80 @@ This provides auto-restart on crash and proper system integration. See [deployme
 
 ```
 src/
-├── adapters/           # Platform adapters
-│   ├── whatsapp.ts         # Baileys-based WhatsApp
-│   ├── whatsapp-media.ts   # Media download/upload
-│   ├── slack.ts            # Slack Events API
-│   └── discord.ts          # Discord interactions
-├── agent/
-│   ├── container-runner.ts # Spawns Docker containers
-│   ├── container-entry.ts  # Runs inside container (calls pi)
-│   └── container-error.ts  # Error types
-├── core/
-│   ├── runtime.ts          # Main orchestrator
-│   ├── router.ts           # Message routing
-│   ├── group-queue.ts      # Per-group concurrency
-│   ├── task-scheduler.ts   # Task scheduling (cron + at)
-│   ├── permissions.ts      # RBAC
-│   ├── trigger.ts          # Pattern matching
-│   ├── rate-limiter.ts     # Rate limiting
-│   └── api.ts              # Internal API (/api/*)
-├── storage/
-│   ├── db.ts               # SQLite schema + queries
-│   ├── memory.ts           # Workspace management
-│   └── pi-auth.ts          # Pi OAuth tokens
-├── cli/
-│   ├── mercury.ts          # Main CLI (init, run, build)
-│   ├── mercury-ctl.ts      # In-container CLI
-│   ├── kb-distill.ts       # KB distillation logic
-│   └── whatsapp-auth.ts    # WhatsApp QR auth
-├── dashboard/
-│   └── index.html          # Admin dashboard (static)
-├── chat-sdk.ts             # Entry point, HTTP server
+├── main.ts                 # Entry point — bootstraps everything
+├── server.ts               # Hono HTTP server factory
 ├── config.ts               # Zod schema + env parsing
 ├── logger.ts               # Pino logger
-└── types.ts                # Shared types
+├── types.ts                # Shared types
+│
+├── adapters/               # Platform adapters
+│   ├── setup.ts                # Adapter initialization
+│   ├── whatsapp.ts             # Baileys-based WhatsApp
+│   ├── whatsapp-media.ts       # Media download/upload
+│   ├── slack.ts                # Slack Events API
+│   ├── discord.ts              # Discord interactions
+│   └── discord-native.ts       # Discord gateway
+│
+├── handlers/               # Message handlers
+│   └── whatsapp.ts             # WhatsApp message processing
+│
+├── core/
+│   ├── runtime.ts              # Main orchestrator
+│   ├── router.ts               # Message routing
+│   ├── group-queue.ts          # Per-group concurrency
+│   ├── task-scheduler.ts       # Task scheduling (cron + at)
+│   ├── permissions.ts          # RBAC
+│   ├── trigger.ts              # Pattern matching
+│   ├── rate-limiter.ts         # Rate limiting
+│   ├── api.ts                  # API app factory (Hono)
+│   ├── api-types.ts            # Shared API types
+│   └── routes/                 # API route handlers
+│       ├── tasks.ts                # /api/tasks/*
+│       ├── roles.ts                # /api/roles/* + /api/permissions/*
+│       ├── config.ts               # /api/config/*
+│       ├── groups.ts               # /api/groups/*
+│       └── control.ts              # /api/whoami, /api/stop, /api/compact
+│
+├── agent/
+│   ├── container-runner.ts     # Spawns Docker containers
+│   ├── container-entry.ts      # Runs inside container (calls pi)
+│   └── container-error.ts      # Error types
+│
+├── storage/
+│   ├── db.ts                   # SQLite schema + queries
+│   ├── memory.ts               # Workspace management
+│   └── pi-auth.ts              # Pi OAuth tokens
+│
+├── cli/
+│   ├── mercury.ts              # Main CLI (init, run, build)
+│   ├── mercury-ctl.ts          # In-container CLI
+│   ├── kb-distill.ts           # KB distillation logic
+│   └── whatsapp-auth.ts        # WhatsApp QR auth
+│
+└── dashboard/
+    └── index.html              # Admin dashboard (static)
 
-tests/                  # Bun tests
-docs/                   # Documentation
-container/              # Dockerfile + build.sh
+tests/                      # Bun tests
+docs/                       # Documentation
+container/                  # Dockerfile + build.sh
 resources/
-├── templates/          # Init templates (AGENTS.md, .env)
-├── prompts/            # KB distillation prompts
-└── extensions/         # Pi extensions (subagent)
+├── templates/              # Init templates (AGENTS.md, .env)
+├── prompts/                # KB distillation prompts
+└── extensions/             # Pi extensions (subagent)
 ```
 
 ## Key Files
 
 | File | What it does |
 |------|--------------|
-| `chat-sdk.ts` | Entry point — starts server, adapters, scheduler |
+| `main.ts` | Entry point — initializes runtime, adapters, server |
+| `server.ts` | Creates Hono app with all routes (dashboard, API, webhooks) |
 | `runtime.ts` | Orchestrates message → container → reply flow |
 | `db.ts` | All SQLite: groups, messages, tasks, roles, config |
 | `container-runner.ts` | Docker spawn, timeout, cleanup |
 | `config.ts` | Environment parsing with Zod |
+| `core/api.ts` | Creates API app, mounts route handlers |
+| `core/routes/*.ts` | Individual API route handlers |
 
 ## Database Schema
 
