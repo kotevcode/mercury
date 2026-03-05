@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import type { AgentContainerRunner } from "../agent/container-runner.js";
 import type { AppConfig } from "../config.js";
+import type { ExtensionRegistry } from "../extensions/loader.js";
 import type { Db } from "../storage/db.js";
 import type { GroupQueue } from "./group-queue.js";
 import { hasPermission } from "./permissions.js";
@@ -14,6 +15,7 @@ export interface ApiContext {
   containerRunner: AgentContainerRunner;
   queue: GroupQueue;
   scheduler: TaskScheduler;
+  registry: ExtensionRegistry;
 }
 
 export interface AuthContext {

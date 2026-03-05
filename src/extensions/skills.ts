@@ -19,36 +19,36 @@ import type { ExtensionMeta } from "./types.js";
  * - Preserves all files (scripts, references, assets) — not just SKILL.md
  */
 export function installExtensionSkills(
-	extensions: ExtensionMeta[],
-	globalDir: string,
-	log: Logger,
+  extensions: ExtensionMeta[],
+  globalDir: string,
+  log: Logger,
 ): void {
-	const skillsDir = path.join(globalDir, "skills");
-	fs.mkdirSync(skillsDir, { recursive: true });
+  const skillsDir = path.join(globalDir, "skills");
+  fs.mkdirSync(skillsDir, { recursive: true });
 
-	// Track which extension names have skills
-	const activeSkillNames = new Set(
-		extensions.filter((e) => e.skillDir).map((e) => e.name),
-	);
+  // Track which extension names have skills
+  const activeSkillNames = new Set(
+    extensions.filter((e) => e.skillDir).map((e) => e.name),
+  );
 
-	// Clean up stale skill directories
-	for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
-		if (!entry.isDirectory()) continue;
-		if (!activeSkillNames.has(entry.name)) {
-			const stale = path.join(skillsDir, entry.name);
-			fs.rmSync(stale, { recursive: true });
-			log.info(`Removed stale skill: ${entry.name}`);
-		}
-	}
+  // Clean up stale skill directories
+  for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (!activeSkillNames.has(entry.name)) {
+      const stale = path.join(skillsDir, entry.name);
+      fs.rmSync(stale, { recursive: true });
+      log.info(`Removed stale skill: ${entry.name}`);
+    }
+  }
 
-	// Copy skill directories
-	for (const ext of extensions) {
-		if (!ext.skillDir) continue;
-		const dst = path.join(skillsDir, ext.name);
-		fs.rmSync(dst, { recursive: true, force: true });
-		fs.cpSync(ext.skillDir, dst, { recursive: true });
-		log.info(`Installed skill: ${ext.name}`);
-	}
+  // Copy skill directories
+  for (const ext of extensions) {
+    if (!ext.skillDir) continue;
+    const dst = path.join(skillsDir, ext.name);
+    fs.rmSync(dst, { recursive: true, force: true });
+    fs.cpSync(ext.skillDir, dst, { recursive: true });
+    log.info(`Installed skill: ${ext.name}`);
+  }
 }
 
 /**
@@ -58,25 +58,25 @@ export function installExtensionSkills(
  * Built-in skills are for mrctl built-in commands (tasks, roles, etc.).
  */
 export function installBuiltinSkills(
-	builtinSkillsDir: string,
-	globalDir: string,
-	log: Logger,
+  builtinSkillsDir: string,
+  globalDir: string,
+  log: Logger,
 ): void {
-	if (!fs.existsSync(builtinSkillsDir)) {
-		log.debug(`No built-in skills directory: ${builtinSkillsDir}`);
-		return;
-	}
+  if (!fs.existsSync(builtinSkillsDir)) {
+    log.debug(`No built-in skills directory: ${builtinSkillsDir}`);
+    return;
+  }
 
-	const skillsDir = path.join(globalDir, "skills");
-	fs.mkdirSync(skillsDir, { recursive: true });
+  const skillsDir = path.join(globalDir, "skills");
+  fs.mkdirSync(skillsDir, { recursive: true });
 
-	for (const entry of fs.readdirSync(builtinSkillsDir, {
-		withFileTypes: true,
-	})) {
-		if (!entry.isDirectory()) continue;
-		const src = path.join(builtinSkillsDir, entry.name);
-		const dst = path.join(skillsDir, entry.name);
-		fs.cpSync(src, dst, { recursive: true });
-		log.debug(`Installed built-in skill: ${entry.name}`);
-	}
+  for (const entry of fs.readdirSync(builtinSkillsDir, {
+    withFileTypes: true,
+  })) {
+    if (!entry.isDirectory()) continue;
+    const src = path.join(builtinSkillsDir, entry.name);
+    const dst = path.join(skillsDir, entry.name);
+    fs.cpSync(src, dst, { recursive: true });
+    log.debug(`Installed built-in skill: ${entry.name}`);
+  }
 }

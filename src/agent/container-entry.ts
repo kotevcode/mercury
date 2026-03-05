@@ -131,6 +131,13 @@ function runPi(payload: Payload): Promise<string> {
       ".mercury.session.jsonl",
     );
 
+    // Combine base system prompt with extension-injected fragments
+    let systemPrompt = buildSystemPrompt();
+    const extPrompt = process.env.MERCURY_EXT_SYSTEM_PROMPT;
+    if (extPrompt) {
+      systemPrompt = `${systemPrompt}\n\n${extPrompt}`;
+    }
+
     const args = [
       "--print",
       "--session",
@@ -140,7 +147,7 @@ function runPi(payload: Payload): Promise<string> {
       "--model",
       process.env.MODEL || "claude-opus-4-6",
       "--append-system-prompt",
-      buildSystemPrompt(),
+      systemPrompt,
       buildPrompt(payload),
     ];
 

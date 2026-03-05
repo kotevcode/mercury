@@ -150,10 +150,10 @@ This works on WhatsApp (quoted messages) and Discord (reply threads). Slack uses
 MERCURY_TRIGGER_MATCH=mention
 MERCURY_TRIGGER_PATTERNS=@Mercury,Mercury
 
-# Per-group overrides (via mercury-ctl)
-mercury-ctl config set trigger_match always
-mercury-ctl config set trigger_patterns "@Bot,Bot"
-mercury-ctl config set trigger_case_sensitive false
+# Per-group overrides (via mrctl)
+mrctl config set trigger_match always
+mrctl config set trigger_patterns "@Bot,Bot"
+mrctl config set trigger_case_sensitive false
 ```
 
 ## Ambient Context

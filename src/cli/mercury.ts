@@ -143,7 +143,8 @@ function initAction(): void {
     "src/agent/container-entry.ts",
     "src/agent/container-entry.ts",
   );
-  copySourceFile("src/cli/mercury-ctl.ts", "src/cli/mercury-ctl.ts");
+  copySourceFile("src/cli/mrctl.ts", "src/cli/mrctl.ts");
+  copySourceFile("src/extensions/reserved.ts", "src/extensions/reserved.ts");
   copySourceFile("src/types.ts", "src/types.ts");
 
   // Build container

@@ -10,7 +10,7 @@ Run on a cron schedule, repeating indefinitely:
 
 ```bash
 # Daily standup at 9am
-mercury-ctl tasks create --cron "0 9 * * *" --prompt "Good morning! What's on the agenda today?"
+mrctl tasks create --cron "0 9 * * *" --prompt "Good morning! What's on the agenda today?"
 ```
 
 ### At Tasks (One-Shot)
@@ -19,10 +19,10 @@ Run once at a specific time, then auto-delete:
 
 ```bash
 # Reminder in 2 hours
-mercury-ctl tasks create --at "2026-03-02T16:00:00Z" --prompt "Time for the team meeting!"
+mrctl tasks create --at "2026-03-02T16:00:00Z" --prompt "Time for the team meeting!"
 
 # Schedule a future check
-mercury-ctl tasks create --at "2026-03-15T09:00:00Z" --prompt "Follow up on the Q1 report"
+mrctl tasks create --at "2026-03-15T09:00:00Z" --prompt "Follow up on the Q1 report"
 ```
 
 At-tasks are useful for:
@@ -46,10 +46,10 @@ The task executes normally but no message is sent to the group.
 
 ```bash
 # Create a silent cron task
-mercury-ctl tasks create --cron "0 3 * * *" --prompt "Run nightly maintenance" --silent
+mrctl tasks create --cron "0 3 * * *" --prompt "Run nightly maintenance" --silent
 
 # Create a silent at-task
-mercury-ctl tasks create --at "2026-03-02T03:00:00Z" --prompt "One-time cleanup" --silent
+mrctl tasks create --at "2026-03-02T03:00:00Z" --prompt "One-time cleanup" --silent
 ```
 
 ## How It Works
@@ -85,30 +85,30 @@ Tasks are processed sequentially within a poll cycle. Each task runs as if the `
 
 ## Creating Tasks
 
-The agent creates tasks via `mercury-ctl`:
+The agent creates tasks via `mrctl`:
 
 ```bash
 # === Cron tasks (recurring) ===
 
 # Daily standup at 9am
-mercury-ctl tasks create --cron "0 9 * * *" --prompt "Good morning! What's on the agenda today?"
+mrctl tasks create --cron "0 9 * * *" --prompt "Good morning! What's on the agenda today?"
 
 # Weekly summary on Fridays at 5pm
-mercury-ctl tasks create --cron "0 17 * * 5" --prompt "Generate a summary of this week's discussions."
+mrctl tasks create --cron "0 17 * * 5" --prompt "Generate a summary of this week's discussions."
 
 # Every 6 hours
-mercury-ctl tasks create --cron "0 */6 * * *" --prompt "Check for any pending items."
+mrctl tasks create --cron "0 */6 * * *" --prompt "Check for any pending items."
 
 # Silent nightly cleanup (no chat output)
-mercury-ctl tasks create --cron "0 3 * * *" --prompt "Clean up old temp files" --silent
+mrctl tasks create --cron "0 3 * * *" --prompt "Clean up old temp files" --silent
 
 # === At tasks (one-shot) ===
 
 # Reminder at a specific time
-mercury-ctl tasks create --at "2026-03-02T14:00:00Z" --prompt "Meeting starts in 15 minutes!"
+mrctl tasks create --at "2026-03-02T14:00:00Z" --prompt "Meeting starts in 15 minutes!"
 
 # Delayed follow-up
-mercury-ctl tasks create --at "2026-03-10T09:00:00Z" --prompt "Check if the deployment completed successfully"
+mrctl tasks create --at "2026-03-10T09:00:00Z" --prompt "Check if the deployment completed successfully"
 ```
 
 **Note:** You must specify either `--cron` or `--at`, not both.
@@ -117,19 +117,19 @@ mercury-ctl tasks create --at "2026-03-10T09:00:00Z" --prompt "Check if the depl
 
 ```bash
 # List all tasks in the current group
-mercury-ctl tasks list
+mrctl tasks list
 
 # Pause a task (stops execution, keeps definition)
-mercury-ctl tasks pause <id>
+mrctl tasks pause <id>
 
 # Resume a paused task
-mercury-ctl tasks resume <id>
+mrctl tasks resume <id>
 
 # Manually trigger a task now
-mercury-ctl tasks run <id>
+mrctl tasks run <id>
 
 # Delete a task permanently
-mercury-ctl tasks delete <id>
+mrctl tasks delete <id>
 ```
 
 ## Cron Format
@@ -213,8 +213,8 @@ Task management requires specific permissions:
 By default, only `admin` has these permissions. Grant to other roles:
 
 ```bash
-mercury-ctl permissions set member prompt,tasks.list
-mercury-ctl permissions set moderator prompt,tasks.list,tasks.pause,tasks.resume
+mrctl permissions set member prompt,tasks.list
+mrctl permissions set moderator prompt,tasks.list,tasks.pause,tasks.resume
 ```
 
 ## Lifecycle

@@ -128,24 +128,24 @@ mercury service status     # Show service status
 mercury service logs [-f]  # View/tail logs
 ```
 
-### mercury-ctl (mrctl)
+### mrctl (mrctl)
 
 Management CLI used by the agent inside containers:
 
 ```bash
-mercury-ctl whoami
-mercury-ctl tasks list|create|pause|resume|delete
-mercury-ctl roles list|grant|revoke
-mercury-ctl permissions show|set
-mercury-ctl config get|set
-mercury-ctl groups list|name|delete
-mercury-ctl stop
-mercury-ctl compact
-mercury-ctl ext list                # List installed extensions
-mercury-ctl <extension> [args...]   # Run extension CLI (permission-gated)
+mrctl whoami
+mrctl tasks list|create|pause|resume|delete
+mrctl roles list|grant|revoke
+mrctl permissions show|set
+mrctl config get|set
+mrctl groups list|name|delete
+mrctl stop
+mrctl compact
+mrctl ext list                # List installed extensions
+mrctl <extension> [args...]   # Run extension CLI (permission-gated)
 ```
 
-> **Note:** `mercury-ctl` is being renamed to `mrctl` in an upcoming release.
+
 
 ---
 
@@ -236,8 +236,8 @@ See [docs/extensions.md](docs/extensions.md) for the full guide.
 ### Per-group Config
 
 ```bash
-mercury-ctl config set trigger_match always
-mercury-ctl config set trigger_patterns "@Bot,Bot"
+mrctl config set trigger_match always
+mrctl config set trigger_patterns "@Bot,Bot"
 ```
 
 ---

@@ -5,14 +5,14 @@
  * a new built-in command is added to mrctl (mercury-ctl).
  */
 export const RESERVED_EXTENSION_NAMES = new Set([
-	"tasks",
-	"roles",
-	"permissions",
-	"config",
-	"groups",
-	"stop",
-	"compact",
-	"ext",
-	"whoami",
-	"help",
+  "tasks",
+  "roles",
+  "permissions",
+  "config",
+  "groups",
+  "stop",
+  "compact",
+  "ext",
+  "whoami",
+  "help",
 ]);

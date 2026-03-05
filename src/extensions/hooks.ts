@@ -8,134 +8,134 @@
 import type { Logger } from "../logger.js";
 import type { ExtensionRegistry } from "./loader.js";
 import type {
-	AfterContainerResult,
-	BeforeContainerResult,
-	MercuryEvents,
-	MercuryExtensionContext,
+  AfterContainerResult,
+  BeforeContainerResult,
+  MercuryEvents,
+  MercuryExtensionContext,
 } from "./types.js";
 
 export class HookDispatcher {
-	constructor(
-		private readonly registry: ExtensionRegistry,
-		private readonly log: Logger,
-	) {}
+  constructor(
+    private readonly registry: ExtensionRegistry,
+    private readonly log: Logger,
+  ) {}
 
-	/**
-	 * Emit a non-mutating event (startup, shutdown, workspace_init).
-	 * Runs all handlers in load order. Errors are caught and logged.
-	 */
-	async emit<E extends "startup" | "shutdown" | "workspace_init">(
-		event: E,
-		data: MercuryEvents[E],
-		ctx: MercuryExtensionContext,
-	): Promise<void> {
-		const handlers = this.registry.getHookHandlers(event);
-		for (const handler of handlers) {
-			try {
-				await handler(data, ctx);
-			} catch (err) {
-				this.log.error(
-					`Hook "${event}" handler failed: ${err instanceof Error ? err.message : String(err)}`,
-				);
-			}
-		}
-	}
+  /**
+   * Emit a non-mutating event (startup, shutdown, workspace_init).
+   * Runs all handlers in load order. Errors are caught and logged.
+   */
+  async emit<E extends "startup" | "shutdown" | "workspace_init">(
+    event: E,
+    data: MercuryEvents[E],
+    ctx: MercuryExtensionContext,
+  ): Promise<void> {
+    const handlers = this.registry.getHookHandlers(event);
+    for (const handler of handlers) {
+      try {
+        await handler(data, ctx);
+      } catch (err) {
+        this.log.error(
+          `Hook "${event}" handler failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+  }
 
-	/**
-	 * Emit before_container event with mutation support.
-	 *
-	 * Mutation semantics:
-	 * - systemPrompt: concatenated across handlers (newline-separated)
-	 * - env: merged (last-write-wins on key conflict)
-	 * - block: first handler to block stops the chain
-	 */
-	async emitBeforeContainer(
-		data: MercuryEvents["before_container"],
-		ctx: MercuryExtensionContext,
-	): Promise<BeforeContainerResult | undefined> {
-		const handlers = this.registry.getHookHandlers("before_container");
-		if (handlers.length === 0) return undefined;
+  /**
+   * Emit before_container event with mutation support.
+   *
+   * Mutation semantics:
+   * - systemPrompt: concatenated across handlers (newline-separated)
+   * - env: merged (last-write-wins on key conflict)
+   * - block: first handler to block stops the chain
+   */
+  async emitBeforeContainer(
+    data: MercuryEvents["before_container"],
+    ctx: MercuryExtensionContext,
+  ): Promise<BeforeContainerResult | undefined> {
+    const handlers = this.registry.getHookHandlers("before_container");
+    if (handlers.length === 0) return undefined;
 
-		let systemPromptParts: string[] = [];
-		let env: Record<string, string> = {};
-		let hasMutations = false;
+    const systemPromptParts: string[] = [];
+    let env: Record<string, string> = {};
+    let hasMutations = false;
 
-		for (const handler of handlers) {
-			try {
-				const result = await handler(data, ctx);
-				if (!result) continue;
+    for (const handler of handlers) {
+      try {
+        const result = await handler(data, ctx);
+        if (!result) continue;
 
-				hasMutations = true;
+        hasMutations = true;
 
-				if (result.block) {
-					return { block: result.block };
-				}
-				if (result.systemPrompt) {
-					systemPromptParts.push(result.systemPrompt);
-				}
-				if (result.env) {
-					env = { ...env, ...result.env };
-				}
-			} catch (err) {
-				this.log.error(
-					`Hook "before_container" handler failed: ${err instanceof Error ? err.message : String(err)}`,
-				);
-			}
-		}
+        if (result.block) {
+          return { block: result.block };
+        }
+        if (result.systemPrompt) {
+          systemPromptParts.push(result.systemPrompt);
+        }
+        if (result.env) {
+          env = { ...env, ...result.env };
+        }
+      } catch (err) {
+        this.log.error(
+          `Hook "before_container" handler failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
 
-		if (!hasMutations) return undefined;
+    if (!hasMutations) return undefined;
 
-		return {
-			...(systemPromptParts.length > 0
-				? { systemPrompt: systemPromptParts.join("\n") }
-				: {}),
-			...(Object.keys(env).length > 0 ? { env } : {}),
-		};
-	}
+    return {
+      ...(systemPromptParts.length > 0
+        ? { systemPrompt: systemPromptParts.join("\n") }
+        : {}),
+      ...(Object.keys(env).length > 0 ? { env } : {}),
+    };
+  }
 
-	/**
-	 * Emit after_container event with mutation support.
-	 *
-	 * Mutation semantics:
-	 * - reply: last handler to return a reply wins
-	 * - suppress: any handler returning true suppresses
-	 */
-	async emitAfterContainer(
-		data: MercuryEvents["after_container"],
-		ctx: MercuryExtensionContext,
-	): Promise<AfterContainerResult | undefined> {
-		const handlers = this.registry.getHookHandlers("after_container");
-		if (handlers.length === 0) return undefined;
+  /**
+   * Emit after_container event with mutation support.
+   *
+   * Mutation semantics:
+   * - reply: last handler to return a reply wins
+   * - suppress: any handler returning true suppresses
+   */
+  async emitAfterContainer(
+    data: MercuryEvents["after_container"],
+    ctx: MercuryExtensionContext,
+  ): Promise<AfterContainerResult | undefined> {
+    const handlers = this.registry.getHookHandlers("after_container");
+    if (handlers.length === 0) return undefined;
 
-		let reply: string | undefined;
-		let suppress = false;
-		let hasMutations = false;
+    let reply: string | undefined;
+    let suppress = false;
+    let hasMutations = false;
 
-		for (const handler of handlers) {
-			try {
-				const result = await handler(data, ctx);
-				if (!result) continue;
+    for (const handler of handlers) {
+      try {
+        const result = await handler(data, ctx);
+        if (!result) continue;
 
-				hasMutations = true;
+        hasMutations = true;
 
-				if (result.reply !== undefined) {
-					reply = result.reply;
-				}
-				if (result.suppress) {
-					suppress = true;
-				}
-			} catch (err) {
-				this.log.error(
-					`Hook "after_container" handler failed: ${err instanceof Error ? err.message : String(err)}`,
-				);
-			}
-		}
+        if (result.reply !== undefined) {
+          reply = result.reply;
+        }
+        if (result.suppress) {
+          suppress = true;
+        }
+      } catch (err) {
+        this.log.error(
+          `Hook "after_container" handler failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
 
-		if (!hasMutations) return undefined;
+    if (!hasMutations) return undefined;
 
-		return {
-			...(reply !== undefined ? { reply } : {}),
-			...(suppress ? { suppress } : {}),
-		};
-	}
+    return {
+      ...(reply !== undefined ? { reply } : {}),
+      ...(suppress ? { suppress } : {}),
+    };
+  }
 }

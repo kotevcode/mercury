@@ -7,6 +7,7 @@ import type { AppConfig } from "../src/config.js";
 import { createApiApp, type Env } from "../src/core/api.js";
 import { GroupQueue } from "../src/core/group-queue.js";
 import { seededGroups } from "../src/core/permissions.js";
+import { ExtensionRegistry } from "../src/extensions/loader.js";
 import { Db } from "../src/storage/db.js";
 
 let tmpDir: string;
@@ -109,6 +110,7 @@ beforeEach(() => {
     containerRunner,
     queue,
     scheduler,
+    registry: new ExtensionRegistry(),
   });
 });
 

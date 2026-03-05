@@ -17,454 +17,454 @@ let dispatcher: HookDispatcher;
 let ctx: MercuryExtensionContext;
 
 const log = {
-	level: "info" as const,
-	debug: () => {},
-	info: () => {},
-	warn: () => {},
-	error: () => {},
-	child() {
-		return this;
-	},
+  level: "info" as const,
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+  child() {
+    return this;
+  },
 };
 
 beforeEach(() => {
-	tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mercury-hooks-"));
-	db = new Db(path.join(tmpDir, "state.db"));
-	extDir = path.join(tmpDir, "extensions");
-	fs.mkdirSync(extDir);
-	registry = new ExtensionRegistry();
-	dispatcher = new HookDispatcher(registry, log);
-	resetPermissions();
-	ctx = { db, config: {} as AppConfig, log };
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mercury-hooks-"));
+  db = new Db(path.join(tmpDir, "state.db"));
+  extDir = path.join(tmpDir, "extensions");
+  fs.mkdirSync(extDir);
+  registry = new ExtensionRegistry();
+  dispatcher = new HookDispatcher(registry, log);
+  resetPermissions();
+  ctx = { db, config: {} as AppConfig, log };
 });
 
 afterEach(() => {
-	db.close();
-	fs.rmSync(tmpDir, { recursive: true, force: true });
+  db.close();
+  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 function writeExt(name: string, code: string) {
-	const dir = path.join(extDir, name);
-	fs.mkdirSync(dir, { recursive: true });
-	fs.writeFileSync(path.join(dir, "index.ts"), code);
+  const dir = path.join(extDir, name);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "index.ts"), code);
 }
 
 describe("HookDispatcher — non-mutating events", () => {
-	it("emits startup to all handlers", async () => {
-		writeExt(
-			"ext-a",
-			`export default function(m) {
+  it("emits startup to all handlers", async () => {
+    writeExt(
+      "ext-a",
+      `export default function(m) {
 				m.on("startup", async () => { globalThis.__hookA = true; });
 			}`,
-		);
-		writeExt(
-			"ext-b",
-			`export default function(m) {
+    );
+    writeExt(
+      "ext-b",
+      `export default function(m) {
 				m.on("startup", async () => { globalThis.__hookB = true; });
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		await dispatcher.emit("startup", {}, ctx);
-		expect((globalThis as any).__hookA).toBe(true);
-		expect((globalThis as any).__hookB).toBe(true);
+    await dispatcher.emit("startup", {}, ctx);
+    expect((globalThis as any).__hookA).toBe(true);
+    expect((globalThis as any).__hookB).toBe(true);
 
-		delete (globalThis as any).__hookA;
-		delete (globalThis as any).__hookB;
-	});
+    delete (globalThis as any).__hookA;
+    delete (globalThis as any).__hookB;
+  });
 
-	it("emits workspace_init with event data", async () => {
-		writeExt(
-			"ws-ext",
-			`export default function(m) {
+  it("emits workspace_init with event data", async () => {
+    writeExt(
+      "ws-ext",
+      `export default function(m) {
 				m.on("workspace_init", async (event) => {
 					globalThis.__wsEvent = event;
 				});
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		await dispatcher.emit(
-			"workspace_init",
-			{ groupId: "g1", workspace: "/tmp/ws" },
-			ctx,
-		);
-		expect((globalThis as any).__wsEvent).toEqual({
-			groupId: "g1",
-			workspace: "/tmp/ws",
-		});
-		delete (globalThis as any).__wsEvent;
-	});
+    await dispatcher.emit(
+      "workspace_init",
+      { groupId: "g1", workspace: "/tmp/ws" },
+      ctx,
+    );
+    expect((globalThis as any).__wsEvent).toEqual({
+      groupId: "g1",
+      workspace: "/tmp/ws",
+    });
+    delete (globalThis as any).__wsEvent;
+  });
 
-	it("continues after handler error", async () => {
-		writeExt(
-			"bad",
-			`export default function(m) {
+  it("continues after handler error", async () => {
+    writeExt(
+      "bad",
+      `export default function(m) {
 				m.on("startup", async () => { throw new Error("boom"); });
 			}`,
-		);
-		writeExt(
-			"good",
-			`export default function(m) {
+    );
+    writeExt(
+      "good",
+      `export default function(m) {
 				m.on("startup", async () => { globalThis.__afterBad = true; });
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		// Should not throw
-		await dispatcher.emit("startup", {}, ctx);
-		expect((globalThis as any).__afterBad).toBe(true);
-		delete (globalThis as any).__afterBad;
-	});
+    // Should not throw
+    await dispatcher.emit("startup", {}, ctx);
+    expect((globalThis as any).__afterBad).toBe(true);
+    delete (globalThis as any).__afterBad;
+  });
 
-	it("runs all registered handlers", async () => {
-		writeExt(
-			"ext-a",
-			`export default function(m) {
+  it("runs all registered handlers", async () => {
+    writeExt(
+      "ext-a",
+      `export default function(m) {
 				m.on("startup", async () => {
 					if (!globalThis.__order) globalThis.__order = [];
 					globalThis.__order.push("a");
 				});
 			}`,
-		);
-		writeExt(
-			"ext-b",
-			`export default function(m) {
+    );
+    writeExt(
+      "ext-b",
+      `export default function(m) {
 				m.on("startup", async () => {
 					if (!globalThis.__order) globalThis.__order = [];
 					globalThis.__order.push("b");
 				});
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		await dispatcher.emit("startup", {}, ctx);
-		// Both handlers ran (order depends on filesystem readdir)
-		expect((globalThis as any).__order).toHaveLength(2);
-		expect((globalThis as any).__order).toContain("a");
-		expect((globalThis as any).__order).toContain("b");
-		delete (globalThis as any).__order;
-	});
+    await dispatcher.emit("startup", {}, ctx);
+    // Both handlers ran (order depends on filesystem readdir)
+    expect((globalThis as any).__order).toHaveLength(2);
+    expect((globalThis as any).__order).toContain("a");
+    expect((globalThis as any).__order).toContain("b");
+    delete (globalThis as any).__order;
+  });
 
-	it("no handlers is a no-op", async () => {
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
-		// Should not throw
-		await dispatcher.emit("startup", {}, ctx);
-		await dispatcher.emit("shutdown", {}, ctx);
-	});
+  it("no handlers is a no-op", async () => {
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
+    // Should not throw
+    await dispatcher.emit("startup", {}, ctx);
+    await dispatcher.emit("shutdown", {}, ctx);
+  });
 });
 
 describe("HookDispatcher — before_container", () => {
-	it("returns undefined when no handlers", async () => {
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+  it("returns undefined when no handlers", async () => {
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitBeforeContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				callerId: "user1",
-				workspace: "/tmp",
-			},
-			ctx,
-		);
-		expect(result).toBeUndefined();
-	});
+    const result = await dispatcher.emitBeforeContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        callerId: "user1",
+        workspace: "/tmp",
+      },
+      ctx,
+    );
+    expect(result).toBeUndefined();
+  });
 
-	it("returns undefined when handlers return nothing", async () => {
-		writeExt(
-			"noop",
-			`export default function(m) {
+  it("returns undefined when handlers return nothing", async () => {
+    writeExt(
+      "noop",
+      `export default function(m) {
 				m.on("before_container", async () => undefined);
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitBeforeContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				callerId: "user1",
-				workspace: "/tmp",
-			},
-			ctx,
-		);
-		expect(result).toBeUndefined();
-	});
+    const result = await dispatcher.emitBeforeContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        callerId: "user1",
+        workspace: "/tmp",
+      },
+      ctx,
+    );
+    expect(result).toBeUndefined();
+  });
 
-	it("collects systemPrompt from single handler", async () => {
-		writeExt(
-			"prompt-ext",
-			`export default function(m) {
+  it("collects systemPrompt from single handler", async () => {
+    writeExt(
+      "prompt-ext",
+      `export default function(m) {
 				m.on("before_container", async () => ({
 					systemPrompt: "Be helpful",
 				}));
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitBeforeContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				callerId: "user1",
-				workspace: "/tmp",
-			},
-			ctx,
-		);
-		expect(result?.systemPrompt).toBe("Be helpful");
-	});
+    const result = await dispatcher.emitBeforeContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        callerId: "user1",
+        workspace: "/tmp",
+      },
+      ctx,
+    );
+    expect(result?.systemPrompt).toBe("Be helpful");
+  });
 
-	it("concatenates systemPrompt from multiple handlers", async () => {
-		writeExt(
-			"ext-a",
-			`export default function(m) {
+  it("concatenates systemPrompt from multiple handlers", async () => {
+    writeExt(
+      "ext-a",
+      `export default function(m) {
 				m.on("before_container", async () => ({ systemPrompt: "Part A" }));
 			}`,
-		);
-		writeExt(
-			"ext-b",
-			`export default function(m) {
+    );
+    writeExt(
+      "ext-b",
+      `export default function(m) {
 				m.on("before_container", async () => ({ systemPrompt: "Part B" }));
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitBeforeContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				callerId: "user1",
-				workspace: "/tmp",
-			},
-			ctx,
-		);
-		// Both parts present (order depends on filesystem readdir)
-		expect(result?.systemPrompt).toContain("Part A");
-		expect(result?.systemPrompt).toContain("Part B");
-	});
+    const result = await dispatcher.emitBeforeContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        callerId: "user1",
+        workspace: "/tmp",
+      },
+      ctx,
+    );
+    // Both parts present (order depends on filesystem readdir)
+    expect(result?.systemPrompt).toContain("Part A");
+    expect(result?.systemPrompt).toContain("Part B");
+  });
 
-	it("merges env vars from multiple handlers", async () => {
-		writeExt(
-			"ext-a",
-			`export default function(m) {
+  it("merges env vars from multiple handlers", async () => {
+    writeExt(
+      "ext-a",
+      `export default function(m) {
 				m.on("before_container", async () => ({
 					env: { ONLY_A: "yes" },
 				}));
 			}`,
-		);
-		writeExt(
-			"ext-b",
-			`export default function(m) {
+    );
+    writeExt(
+      "ext-b",
+      `export default function(m) {
 				m.on("before_container", async () => ({
 					env: { ONLY_B: "yes" },
 				}));
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitBeforeContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				callerId: "user1",
-				workspace: "/tmp",
-			},
-			ctx,
-		);
-		expect(result?.env?.ONLY_A).toBe("yes");
-		expect(result?.env?.ONLY_B).toBe("yes");
-	});
+    const result = await dispatcher.emitBeforeContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        callerId: "user1",
+        workspace: "/tmp",
+      },
+      ctx,
+    );
+    expect(result?.env?.ONLY_A).toBe("yes");
+    expect(result?.env?.ONLY_B).toBe("yes");
+  });
 
-	it("block stops the chain immediately", async () => {
-		writeExt(
-			"blocker",
-			`export default function(m) {
+  it("block stops the chain immediately", async () => {
+    writeExt(
+      "blocker",
+      `export default function(m) {
 				m.on("before_container", async () => ({
 					block: { reason: "Rate limited" },
 				}));
 			}`,
-		);
-		writeExt(
-			"never-runs",
-			`export default function(m) {
+    );
+    writeExt(
+      "never-runs",
+      `export default function(m) {
 				m.on("before_container", async () => {
 					globalThis.__shouldNotRun = true;
 					return { systemPrompt: "should not appear" };
 				});
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitBeforeContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				callerId: "user1",
-				workspace: "/tmp",
-			},
-			ctx,
-		);
-		expect(result?.block).toEqual({ reason: "Rate limited" });
-		expect(result?.systemPrompt).toBeUndefined();
-		expect((globalThis as any).__shouldNotRun).toBeUndefined();
-	});
+    const result = await dispatcher.emitBeforeContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        callerId: "user1",
+        workspace: "/tmp",
+      },
+      ctx,
+    );
+    expect(result?.block).toEqual({ reason: "Rate limited" });
+    expect(result?.systemPrompt).toBeUndefined();
+    expect((globalThis as any).__shouldNotRun).toBeUndefined();
+  });
 
-	it("handler error is caught, other handlers still run", async () => {
-		writeExt(
-			"bad-hook",
-			`export default function(m) {
+  it("handler error is caught, other handlers still run", async () => {
+    writeExt(
+      "bad-hook",
+      `export default function(m) {
 				m.on("before_container", async () => { throw new Error("fail"); });
 			}`,
-		);
-		writeExt(
-			"good-hook",
-			`export default function(m) {
+    );
+    writeExt(
+      "good-hook",
+      `export default function(m) {
 				m.on("before_container", async () => ({ systemPrompt: "survived" }));
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitBeforeContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				callerId: "user1",
-				workspace: "/tmp",
-			},
-			ctx,
-		);
-		expect(result?.systemPrompt).toBe("survived");
-	});
+    const result = await dispatcher.emitBeforeContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        callerId: "user1",
+        workspace: "/tmp",
+      },
+      ctx,
+    );
+    expect(result?.systemPrompt).toBe("survived");
+  });
 });
 
 describe("HookDispatcher — after_container", () => {
-	it("returns undefined when no handlers", async () => {
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+  it("returns undefined when no handlers", async () => {
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitAfterContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				reply: "world",
-				durationMs: 100,
-			},
-			ctx,
-		);
-		expect(result).toBeUndefined();
-	});
+    const result = await dispatcher.emitAfterContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        reply: "world",
+        durationMs: 100,
+      },
+      ctx,
+    );
+    expect(result).toBeUndefined();
+  });
 
-	it("handler can replace reply", async () => {
-		writeExt(
-			"replacer",
-			`export default function(m) {
+  it("handler can replace reply", async () => {
+    writeExt(
+      "replacer",
+      `export default function(m) {
 				m.on("after_container", async () => ({ reply: "replaced" }));
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitAfterContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				reply: "original",
-				durationMs: 100,
-			},
-			ctx,
-		);
-		expect(result?.reply).toBe("replaced");
-	});
+    const result = await dispatcher.emitAfterContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        reply: "original",
+        durationMs: 100,
+      },
+      ctx,
+    );
+    expect(result?.reply).toBe("replaced");
+  });
 
-	it("any handler can suppress", async () => {
-		writeExt(
-			"suppressor",
-			`export default function(m) {
+  it("any handler can suppress", async () => {
+    writeExt(
+      "suppressor",
+      `export default function(m) {
 				m.on("after_container", async () => ({ suppress: true }));
 			}`,
-		);
-		writeExt(
-			"other",
-			`export default function(m) {
+    );
+    writeExt(
+      "other",
+      `export default function(m) {
 				m.on("after_container", async () => ({ reply: "modified" }));
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitAfterContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				reply: "original",
-				durationMs: 100,
-			},
-			ctx,
-		);
-		expect(result?.suppress).toBe(true);
-		// reply from second handler is still collected
-		expect(result?.reply).toBe("modified");
-	});
+    const result = await dispatcher.emitAfterContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        reply: "original",
+        durationMs: 100,
+      },
+      ctx,
+    );
+    expect(result?.suppress).toBe(true);
+    // reply from second handler is still collected
+    expect(result?.reply).toBe("modified");
+  });
 
-	it("handler error is caught, other handlers still run", async () => {
-		writeExt(
-			"bad-after",
-			`export default function(m) {
+  it("handler error is caught, other handlers still run", async () => {
+    writeExt(
+      "bad-after",
+      `export default function(m) {
 				m.on("after_container", async () => { throw new Error("fail"); });
 			}`,
-		);
-		writeExt(
-			"good-after",
-			`export default function(m) {
+    );
+    writeExt(
+      "good-after",
+      `export default function(m) {
 				m.on("after_container", async () => ({ reply: "survived" }));
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitAfterContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				reply: "original",
-				durationMs: 100,
-			},
-			ctx,
-		);
-		expect(result?.reply).toBe("survived");
-	});
+    const result = await dispatcher.emitAfterContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        reply: "original",
+        durationMs: 100,
+      },
+      ctx,
+    );
+    expect(result?.reply).toBe("survived");
+  });
 
-	it("returns undefined when handlers return nothing", async () => {
-		writeExt(
-			"noop-after",
-			`export default function(m) {
+  it("returns undefined when handlers return nothing", async () => {
+    writeExt(
+      "noop-after",
+      `export default function(m) {
 				m.on("after_container", async () => undefined);
 			}`,
-		);
-		await registry.loadAll(extDir, db, log);
-		dispatcher = new HookDispatcher(registry, log);
+    );
+    await registry.loadAll(extDir, db, log);
+    dispatcher = new HookDispatcher(registry, log);
 
-		const result = await dispatcher.emitAfterContainer(
-			{
-				groupId: "g1",
-				prompt: "hello",
-				reply: "original",
-				durationMs: 100,
-			},
-			ctx,
-		);
-		expect(result).toBeUndefined();
-	});
+    const result = await dispatcher.emitAfterContainer(
+      {
+        groupId: "g1",
+        prompt: "hello",
+        reply: "original",
+        durationMs: 100,
+      },
+      ctx,
+    );
+    expect(result).toBeUndefined();
+  });
 });

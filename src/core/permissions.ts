@@ -29,10 +29,7 @@ const BUILT_IN_PERMISSIONS = new Set([
 // Extension-registered permissions (dynamic, added at runtime)
 // ---------------------------------------------------------------------------
 
-const registeredPermissions = new Map<
-  string,
-  { defaultRoles: string[] }
->();
+const registeredPermissions = new Map<string, { defaultRoles: string[] }>();
 
 /**
  * Register a new permission from an extension.

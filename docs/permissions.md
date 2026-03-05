@@ -57,20 +57,20 @@ Custom roles can be created by assigning permissions to any role name.
 
 ## Managing Roles
 
-The agent uses `mercury-ctl` (being renamed to `mrctl`) to manage roles:
+The agent uses `mrctl` to manage roles:
 
 ```bash
 # List all roles in the current group
-mercury-ctl roles list
+mrctl roles list
 
 # Grant admin role to a user
-mercury-ctl roles grant 1234567890@s.whatsapp.net --role admin
+mrctl roles grant 1234567890@s.whatsapp.net --role admin
 
 # Grant a custom role
-mercury-ctl roles grant 1234567890@s.whatsapp.net --role moderator
+mrctl roles grant 1234567890@s.whatsapp.net --role moderator
 
 # Revoke role (user becomes member)
-mercury-ctl roles revoke 1234567890@s.whatsapp.net
+mrctl roles revoke 1234567890@s.whatsapp.net
 ```
 
 ## Managing Permissions
@@ -79,37 +79,37 @@ Permissions are per-role, per-group:
 
 ```bash
 # Show permissions for all roles
-mercury-ctl permissions show
+mrctl permissions show
 
 # Show permissions for a specific role
-mercury-ctl permissions show --role member
+mrctl permissions show --role member
 
 # Give members ability to stop the agent
-mercury-ctl permissions set member prompt,stop
+mrctl permissions set member prompt,stop
 
 # Create a moderator role with task management
-mercury-ctl permissions set moderator prompt,stop,tasks.list,tasks.pause,tasks.resume
+mrctl permissions set moderator prompt,stop,tasks.list,tasks.pause,tasks.resume
 
 # Give a role full task control
-mercury-ctl permissions set taskmaster prompt,tasks.list,tasks.create,tasks.pause,tasks.resume,tasks.delete
+mrctl permissions set taskmaster prompt,tasks.list,tasks.create,tasks.pause,tasks.resume,tasks.delete
 ```
 
 ## Managing Groups
 
-Groups can be listed and renamed via `mercury-ctl`:
+Groups can be listed and renamed via `mrctl`:
 
 ```bash
 # List all groups with their names
-mercury-ctl groups list
+mrctl groups list
 
 # Get current group's display name
-mercury-ctl groups name
+mrctl groups name
 
 # Set current group's display name
-mercury-ctl groups name "Startup Buddies"
+mrctl groups name "Startup Buddies"
 
 # Delete current group (tasks, messages, roles, config)
-mercury-ctl groups delete
+mrctl groups delete
 ```
 
 Group names are stored in the database and shown in logs/dashboard for easier identification (instead of raw IDs like `whatsapp:120363404922156552@g.us`).
@@ -162,7 +162,7 @@ This registers a permission named after the extension (e.g., `napkin`). The beha
 - **Per-group overrides** still take precedence over defaults
 - **Built-in permission names** cannot be overridden by extensions
 
-The agent uses `mercury-ctl ext list` to discover available extensions, and `mercury-ctl <ext-name> <args>` to run extension CLIs. Permission is checked before execution.
+The agent uses `mrctl ext list` to discover available extensions, and `mrctl <ext-name> <args>` to run extension CLIs. Permission is checked before execution.
 
 ### API
 

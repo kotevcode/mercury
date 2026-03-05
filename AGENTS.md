@@ -83,7 +83,7 @@ src/
 │
 ├── cli/
 │   ├── mercury.ts              # Main CLI (init, run, build)
-│   ├── mercury-ctl.ts          # In-container CLI (will become mrctl)
+│   ├── mrctl.ts                # In-container CLI
 │   ├── kb-distill.ts           # KB distillation logic
 │   └── whatsapp-auth.ts        # WhatsApp QR auth
 │
@@ -127,7 +127,7 @@ Tables in `state.db`:
 
 ## API
 
-Internal API used by `mercury-ctl` from inside containers:
+Internal API used by `mrctl` from inside containers:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -168,7 +168,7 @@ Key types are in `src/extensions/types.ts`. See [docs/extensions.md](docs/extens
 
 ### Built-in vs extension commands
 
-`mercury-ctl` (will become `mrctl`) has two types of commands:
+`mrctl` has two types of commands:
 - **Built-in**: `tasks`, `roles`, `permissions`, `config`, `groups`, `stop`, `compact` — HTTP calls to host API
 - **Extension**: `mrctl <ext-name> <args>` — permission check then local CLI exec in container
 
