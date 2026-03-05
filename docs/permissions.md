@@ -57,7 +57,7 @@ Custom roles can be created by assigning permissions to any role name.
 
 ## Managing Roles
 
-The agent uses `mercury-ctl` to manage roles:
+The agent uses `mercury-ctl` (being renamed to `mrctl`) to manage roles:
 
 ```bash
 # List all roles in the current group
@@ -145,6 +145,32 @@ The `system` role is special:
 
 ```typescript
 if (isSystemCaller(callerId)) return "system";
+```
+
+## Extension Permissions
+
+Extensions register additional permissions at runtime via the extension API:
+
+```typescript
+mercury.permission({ defaultRoles: ["admin", "member"] });
+```
+
+This registers a permission named after the extension (e.g., `napkin`). The behavior:
+
+- **Admin** always gets all permissions (built-in + extension)
+- **Extension `defaultRoles`** are respected — if `["member"]` is specified, members get that permission by default
+- **Per-group overrides** still take precedence over defaults
+- **Built-in permission names** cannot be overridden by extensions
+
+The agent uses `mercury-ctl ext list` to discover available extensions, and `mercury-ctl <ext-name> <args>` to run extension CLIs. Permission is checked before execution.
+
+### API
+
+```typescript
+registerPermission(name, { defaultRoles })   // Register (called by extension loader)
+getAllPermissions()                            // Built-in + extension permissions
+isValidPermission(name)                       // Check if name is valid
+resetPermissions()                            // Clear registered (test isolation)
 ```
 
 ## Scope

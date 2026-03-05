@@ -88,6 +88,7 @@ Each chat group gets its own workspace and pi session. Messages are routed, queu
 | **Media** | Images, documents, voice notes | [docs/media/overview.md](docs/media/overview.md) |
 | **KB Distillation** | Extract lasting knowledge from chats | [docs/kb-distillation.md](docs/kb-distillation.md) |
 | **Subagents** | Delegate tasks to specialized agents | [docs/subagents.md](docs/subagents.md) |
+| **Extensions** | TypeScript plugins for CLIs, skills, jobs, hooks | [docs/extensions.md](docs/extensions.md) |
 
 ---
 
@@ -127,7 +128,7 @@ mercury service status     # Show service status
 mercury service logs [-f]  # View/tail logs
 ```
 
-### mercury-ctl
+### mercury-ctl (mrctl)
 
 Management CLI used by the agent inside containers:
 
@@ -140,7 +141,41 @@ mercury-ctl config get|set
 mercury-ctl groups list|name|delete
 mercury-ctl stop
 mercury-ctl compact
+mercury-ctl ext list                # List installed extensions
+mercury-ctl <extension> [args...]   # Run extension CLI (permission-gated)
 ```
+
+> **Note:** `mercury-ctl` is being renamed to `mrctl` in an upcoming release.
+
+---
+
+## Extensions
+
+Mercury supports TypeScript extensions that add CLIs, skills, background jobs, lifecycle hooks, config keys, and dashboard widgets.
+
+```
+.mercury/extensions/
+├── napkin/
+│   ├── index.ts
+│   └── skill/SKILL.md
+└── kb-distill/
+    └── index.ts
+```
+
+Each extension exports a setup function:
+
+```typescript
+export default function(mercury) {
+  mercury.cli({ name: "napkin", install: "bun add -g napkin-ai" });
+  mercury.permission({ defaultRoles: ["admin", "member"] });
+  mercury.skill("./skill");
+  mercury.on("workspace_init", async ({ workspace }) => { ... });
+}
+```
+
+Extensions with CLIs get auto-installed into a derived Docker image. Skills are symlinked for agent discovery. Permissions integrate with the existing RBAC system.
+
+See [docs/extensions.md](docs/extensions.md) for the full guide.
 
 ---
 
@@ -219,6 +254,7 @@ mercury-ctl config set trigger_patterns "@Bot,Bot"
 - [Container lifecycle](docs/container-lifecycle.md)
 - [Graceful shutdown](docs/graceful-shutdown.md)
 - [Rate limiting](docs/rate-limiting.md)
+- [Extensions](docs/extensions.md)
 
 ---
 

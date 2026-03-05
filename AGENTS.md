@@ -73,9 +73,12 @@ src/
 │   ├── memory.ts               # Workspace management
 │   └── pi-auth.ts              # Pi OAuth tokens
 │
+├── extensions/
+│   └── types.ts                # Extension system type definitions
+│
 ├── cli/
 │   ├── mercury.ts              # Main CLI (init, run, build)
-│   ├── mercury-ctl.ts          # In-container CLI
+│   ├── mercury-ctl.ts          # In-container CLI (will become mrctl)
 │   ├── kb-distill.ts           # KB distillation logic
 │   └── whatsapp-auth.ts        # WhatsApp QR auth
 │
@@ -110,9 +113,9 @@ Tables in `state.db`:
 - `groups` — Chat groups/channels
 - `messages` — Message history (for ambient context)
 - `tasks` — Scheduled tasks (cron + one-shot at)
-- `roles` — User role assignments
-- `permissions` — Role permission sets
-- `config` — Per-group config overrides
+- `group_roles` — User role assignments per group
+- `group_config` — Per-group config overrides + role permission sets
+- `extension_state` — Scoped key-value store for extensions `(extension, key) → value`
 
 ## API
 
@@ -134,6 +137,39 @@ Internal API used by `mercury-ctl` from inside containers:
 
 Auth: `X-Mercury-Caller` + `X-Mercury-Group` headers.
 
+## Extension System
+
+Mercury has a TypeScript extension system. Extensions live in `.mercury/extensions/*/` and export a setup function:
+
+```typescript
+import type { MercuryExtensionAPI } from "../extensions/types.js";
+
+export default function(mercury: MercuryExtensionAPI) {
+  mercury.cli({ name: "napkin", install: "bun add -g napkin-ai" });
+  mercury.permission({ defaultRoles: ["admin", "member"] });
+  mercury.skill("./skill");
+  mercury.on("workspace_init", async (event, ctx) => { ... });
+  mercury.job("distill", { interval: 3600_000, run: async (ctx) => { ... } });
+  mercury.config("enabled", { description: "...", default: "true" });
+  mercury.widget({ label: "Status", render: (ctx) => "<p>OK</p>" });
+  mercury.store.get("key");
+}
+```
+
+Key types are in `src/extensions/types.ts`. See [docs/extensions.md](docs/extensions.md) for the full design.
+
+### Built-in vs extension commands
+
+`mercury-ctl` (will become `mrctl`) has two types of commands:
+- **Built-in**: `tasks`, `roles`, `permissions`, `config`, `groups`, `stop`, `compact` — HTTP calls to host API
+- **Extension**: `mrctl <ext-name> <args>` — permission check then local CLI exec in container
+
+Built-in names are reserved — extensions cannot collide with them.
+
+### Permissions
+
+Permissions are now dynamic. Built-in permissions are static; extensions register new ones at runtime via `registerPermission()`. Admin always gets all permissions. See `src/core/permissions.ts`.
+
 ## Docs
 
 | Doc | Topic |
@@ -147,6 +183,7 @@ Auth: `X-Mercury-Caller` + `X-Mercury-Group` headers.
 | [graceful-shutdown.md](docs/graceful-shutdown.md) | Shutdown sequence |
 | [rate-limiting.md](docs/rate-limiting.md) | Rate limits |
 | [media/overview.md](docs/media/overview.md) | Media handling |
+| [extensions.md](docs/extensions.md) | Extension system design |
 
 ## Conventions
 
