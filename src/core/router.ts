@@ -1,6 +1,5 @@
 import type { AppConfig } from "../config.js";
 import type { Db } from "../storage/db.js";
-import type { Permission } from "./permissions.js";
 import { hasPermission, resolveRole } from "./permissions.js";
 import { loadTriggerConfig, matchTrigger } from "./trigger.js";
 
@@ -14,7 +13,7 @@ export type RouteResult =
  * Chat-level commands that bypass the LLM.
  * Mapped to the permission required to execute them.
  */
-const CHAT_COMMANDS: Record<string, Permission> = {
+const CHAT_COMMANDS: Record<string, string> = {
   stop: "stop",
   compact: "compact",
 };

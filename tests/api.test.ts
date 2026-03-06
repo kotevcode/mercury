@@ -7,6 +7,8 @@ import type { AppConfig } from "../src/config.js";
 import { createApiApp, type Env } from "../src/core/api.js";
 import { GroupQueue } from "../src/core/group-queue.js";
 import { seededGroups } from "../src/core/permissions.js";
+import { ConfigRegistry } from "../src/extensions/config-registry.js";
+import { ExtensionRegistry } from "../src/extensions/loader.js";
 import { Db } from "../src/storage/db.js";
 
 let tmpDir: string;
@@ -109,6 +111,8 @@ beforeEach(() => {
     containerRunner,
     queue,
     scheduler,
+    registry: new ExtensionRegistry(),
+    configRegistry: new ConfigRegistry(),
   });
 });
 
@@ -325,6 +329,11 @@ describe("POST /api/tasks/:id/pause", () => {
     });
     expect(status).toBe(404);
   });
+
+  test("invalid task ID returns 400", async () => {
+    const { status } = await api("POST", "/api/tasks/abc/pause");
+    expect(status).toBe(400);
+  });
 });
 
 describe("POST /api/tasks/:id/resume", () => {
@@ -339,6 +348,16 @@ describe("POST /api/tasks/:id/resume", () => {
     expect(status).toBe(200);
     expect(data.active).toBe(true);
   });
+
+  test("returns 404 for non-existent task", async () => {
+    const { status } = await api("POST", "/api/tasks/9999/resume");
+    expect(status).toBe(404);
+  });
+
+  test("invalid task ID returns 400", async () => {
+    const { status } = await api("POST", "/api/tasks/abc/resume");
+    expect(status).toBe(400);
+  });
 });
 
 describe("POST /api/tasks/:id/run", () => {
@@ -352,6 +371,16 @@ describe("POST /api/tasks/:id/run", () => {
     expect(status).toBe(200);
     expect(data.triggered).toBe(true);
     expect(triggeredTasks).toContain(taskId);
+  });
+
+  test("returns 404 for non-existent task", async () => {
+    const { status } = await api("POST", "/api/tasks/9999/run");
+    expect(status).toBe(404);
+  });
+
+  test("invalid task ID returns 400", async () => {
+    const { status } = await api("POST", "/api/tasks/abc/run");
+    expect(status).toBe(400);
   });
 
   test("rejects running paused task", async () => {

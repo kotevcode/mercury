@@ -1,13 +1,13 @@
 # KB Distillation
 
-Mercury can automatically extract lasting knowledge from conversations and save it to an Obsidian-compatible vault. The KB distiller runs periodically, processing daily message logs and updating entity files.
+Mercury can automatically extract lasting knowledge from conversations and save it to an Obsidian-compatible vault. KB distillation is a built-in extension (`src/extensions/kb-distill/`) that runs as a background job, processing daily message logs and updating entity files.
 
 ## How It Works
 
 ```
-Runtime (interval)
+JobRunner (interval)
   │
-  └─► kbDistill()
+  └─► kb-distill:distill job
         │
         ├─► Export messages to .messages/YYYY-MM-DD.jsonl
         │
@@ -64,7 +64,9 @@ MERCURY_KB_DISTILL_INTERVAL_MS=0
 | `0` | Disabled (default) |
 | `> 0` | Runs on that interval in milliseconds |
 
-When enabled, distillation runs immediately on startup, then every interval.
+The extension also registers a per-group config key `kb-distill.interval_ms` via `mrctl config set`.
+
+When enabled, the job runs immediately on startup, then every hour (checking the interval config on each tick to decide whether to actually distill).
 
 ## CLI Usage
 
@@ -183,20 +185,23 @@ The distiller ignores:
 
 ## Lifecycle
 
+KB distillation is now a built-in extension (`src/extensions/kb-distill/`). It registers a background job via `mercury.job()` that runs on a fixed interval.
+
 ```
 mercury run
   │
-  ├─► runtime.initialize()
+  ├─► Load extensions (including kb-distill)
   │
-  ├─► startKbDistill()
-  │     ├─► Run immediately
-  │     └─► Schedule interval
+  ├─► JobRunner.start()
+  │     └─► kb-distill:distill job
+  │           ├─► Run immediately
+  │           └─► Schedule interval (1h default)
   │
   ├─► ... running ...
   │
   └─► SIGTERM/SIGINT
-        └─► stopKbDistill()
-              └─► Clear interval (graceful)
+        └─► JobRunner.stop()
+              └─► Clear all job timers
 ```
 
 ## Dependencies

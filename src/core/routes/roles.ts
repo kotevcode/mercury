@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { checkPerm, type Env, getApiCtx, getAuth } from "../api-types.js";
 import {
-  ALL_PERMISSIONS,
+  getAllPermissions,
   getRolePermissions,
-  type Permission,
+  isValidPermission,
 } from "../permissions.js";
 
 export const roles = new Hono<Env>();
@@ -89,7 +89,7 @@ permissions.get("/", (c) => {
   return c.json({
     groupId,
     permissions: allRoles,
-    available: ALL_PERMISSIONS,
+    available: getAllPermissions(),
   });
 });
 
@@ -108,13 +108,11 @@ permissions.put("/", async (c) => {
     return c.json({ error: "Missing role or permissions array" }, 400);
   }
 
-  const invalid = body.permissions.filter(
-    (p) => !ALL_PERMISSIONS.includes(p as Permission),
-  );
+  const invalid = body.permissions.filter((p) => !isValidPermission(p));
   if (invalid.length > 0) {
     return c.json(
       {
-        error: `Invalid permissions: ${invalid.join(", ")}. Valid: ${ALL_PERMISSIONS.join(", ")}`,
+        error: `Invalid permissions: ${invalid.join(", ")}. Valid: ${getAllPermissions().join(", ")}`,
       },
       400,
     );

@@ -3,10 +3,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  ALL_PERMISSIONS,
+  getAllPermissions,
   getRolePermissions,
   hasPermission,
   isSystemCaller,
+  registerPermission,
+  resetPermissions,
   resolveRole,
   seededGroups,
 } from "../src/core/permissions.js";
@@ -20,6 +22,7 @@ beforeEach(() => {
   db = new Db(path.join(tmpDir, "state.db"));
   db.ensureGroup("g1");
   seededGroups.clear();
+  resetPermissions();
 });
 
 afterEach(() => {
@@ -43,7 +46,7 @@ describe("isSystemCaller", () => {
 describe("getRolePermissions", () => {
   test("admin has all permissions by default", () => {
     const perms = getRolePermissions(db, "g1", "admin");
-    for (const p of ALL_PERMISSIONS) {
+    for (const p of getAllPermissions()) {
       expect(perms.has(p)).toBe(true);
     }
   });
@@ -57,7 +60,7 @@ describe("getRolePermissions", () => {
 
   test("system role has all permissions", () => {
     const perms = getRolePermissions(db, "g1", "system");
-    for (const p of ALL_PERMISSIONS) {
+    for (const p of getAllPermissions()) {
       expect(perms.has(p)).toBe(true);
     }
   });
@@ -137,6 +140,90 @@ describe("hasPermission", () => {
 
   test("member does not have stop permission", () => {
     expect(hasPermission(db, "g1", "member", "stop")).toBe(false);
+  });
+});
+
+describe("dynamic permissions", () => {
+  test("registerPermission adds to getAllPermissions", () => {
+    const before = getAllPermissions();
+    registerPermission("napkin", { defaultRoles: ["admin", "member"] });
+    const after = getAllPermissions();
+    expect(after.length).toBe(before.length + 1);
+    expect(after).toContain("napkin");
+  });
+
+  test("cannot override built-in permission", () => {
+    expect(() =>
+      registerPermission("prompt", { defaultRoles: ["admin"] }),
+    ).toThrow("built-in");
+  });
+
+  test("admin auto-gets extension permission", () => {
+    registerPermission("napkin", { defaultRoles: [] });
+    const perms = getRolePermissions(db, "g1", "admin");
+    expect(perms.has("napkin")).toBe(true);
+  });
+
+  test("member gets extension permission when in defaultRoles", () => {
+    registerPermission("napkin", { defaultRoles: ["member"] });
+    const perms = getRolePermissions(db, "g1", "member");
+    expect(perms.has("napkin")).toBe(true);
+  });
+
+  test("member does not get extension permission when not in defaultRoles", () => {
+    registerPermission("napkin", { defaultRoles: ["admin"] });
+    const perms = getRolePermissions(db, "g1", "member");
+    expect(perms.has("napkin")).toBe(false);
+  });
+
+  test("custom role gets extension permission via defaultRoles", () => {
+    registerPermission("napkin", {
+      defaultRoles: ["moderator"],
+    });
+    const perms = getRolePermissions(db, "g1", "moderator");
+    expect(perms.has("napkin")).toBe(true);
+    expect(perms.size).toBe(1);
+  });
+
+  test("per-group override takes precedence over extension defaults", () => {
+    registerPermission("napkin", { defaultRoles: ["member"] });
+    // Override member to only have prompt (no napkin)
+    db.setGroupConfig("g1", "role.member.permissions", "prompt", "system");
+    const perms = getRolePermissions(db, "g1", "member");
+    expect(perms.has("prompt")).toBe(true);
+    expect(perms.has("napkin")).toBe(false);
+  });
+
+  test("per-group override can include extension permissions", () => {
+    registerPermission("napkin", { defaultRoles: [] });
+    db.setGroupConfig(
+      "g1",
+      "role.member.permissions",
+      "prompt,napkin",
+      "system",
+    );
+    const perms = getRolePermissions(db, "g1", "member");
+    expect(perms.has("napkin")).toBe(true);
+  });
+
+  test("system role gets extension permissions", () => {
+    registerPermission("napkin", { defaultRoles: [] });
+    const perms = getRolePermissions(db, "g1", "system");
+    expect(perms.has("napkin")).toBe(true);
+  });
+
+  test("hasPermission works with extension permissions", () => {
+    registerPermission("napkin", { defaultRoles: ["member"] });
+    expect(hasPermission(db, "g1", "member", "napkin")).toBe(true);
+    expect(hasPermission(db, "g1", "member", "stop")).toBe(false);
+  });
+
+  test("resetPermissions clears registered permissions", () => {
+    registerPermission("napkin", { defaultRoles: ["member"] });
+    resetPermissions();
+    const perms = getRolePermissions(db, "g1", "member");
+    expect(perms.has("napkin")).toBe(false);
+    expect(getAllPermissions()).not.toContain("napkin");
   });
 });
 

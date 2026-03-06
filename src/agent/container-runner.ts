@@ -31,9 +31,20 @@ export class AgentContainerRunner {
   private readonly abortedGroups = new Set<string>();
   private readonly timedOutGroups = new Set<string>();
   private containerCounter = 0;
+  private imageOverride: string | undefined;
 
   constructor(private readonly config: AppConfig) {
     this.validateImage();
+  }
+
+  /** Override the container image (e.g., derived image with extension CLIs). */
+  setImage(image: string): void {
+    this.imageOverride = image;
+  }
+
+  /** The image to use for container spawns. */
+  get image(): string {
+    return this.imageOverride ?? this.config.agentContainerImage;
   }
 
   /**
@@ -54,7 +65,7 @@ export class AgentContainerRunner {
     // For custom images, log a warning about requirements
     logger.warn("Using custom agent image", {
       image,
-      note: "Ensure image has: bun, pi, agent-browser, napkin, mercury-ctl",
+      note: "Ensure image has: bun, pi, agent-browser, napkin, mrctl",
       docs: "See docs/container-lifecycle.md for custom image requirements",
     });
   }
@@ -163,6 +174,7 @@ export class AgentContainerRunner {
     prompt: string;
     callerId: string;
     attachments?: MessageAttachment[];
+    extraEnv?: Record<string, string>;
   }): Promise<string> {
     const globalDir = path.resolve(this.config.globalDir);
     const groupsRoot = path.resolve(this.config.groupsDir);
@@ -244,7 +256,14 @@ export class AgentContainerRunner {
       args.push("-e", `${key}=${value}`);
     }
 
-    args.push(this.config.agentContainerImage);
+    // Extension env vars from before_container hooks
+    if (input.extraEnv) {
+      for (const [key, value] of Object.entries(input.extraEnv)) {
+        args.push("-e", `${key}=${value}`);
+      }
+    }
+
+    args.push(this.image);
 
     const payload = {
       ...input,

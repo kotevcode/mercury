@@ -1,7 +1,9 @@
 import { ContainerError } from "../agent/container-error.js";
 import { AgentContainerRunner } from "../agent/container-runner.js";
-import { kbDistill } from "../cli/kb-distill.js";
 import { type AppConfig, resolveProjectPath } from "../config.js";
+import { HookDispatcher } from "../extensions/hooks.js";
+import type { ExtensionRegistry } from "../extensions/loader.js";
+import type { MercuryExtensionContext } from "../extensions/types.js";
 import { logger } from "../logger.js";
 import { Db } from "../storage/db.js";
 import {
@@ -24,10 +26,11 @@ export class MercuryCoreRuntime {
   readonly queue: GroupQueue;
   readonly containerRunner: AgentContainerRunner;
   readonly rateLimiter: RateLimiter;
+  hooks: HookDispatcher | null = null;
+  private extensionCtx: MercuryExtensionContext | null = null;
   private readonly shutdownHooks: ShutdownHook[] = [];
   private shuttingDown = false;
   private signalHandlersInstalled = false;
-  private kbDistillTimer: NodeJS.Timeout | null = null;
 
   constructor(readonly config: AppConfig) {
     this.db = new Db(resolveProjectPath(config.dbPath));
@@ -53,6 +56,19 @@ export class MercuryCoreRuntime {
     this.rateLimiter.startCleanup();
   }
 
+  /**
+   * Wire extension system into the runtime.
+   * Must be called after extensions are loaded and before accepting messages.
+   */
+  initExtensions(registry: ExtensionRegistry): void {
+    this.hooks = new HookDispatcher(registry, logger);
+    this.extensionCtx = {
+      db: this.db,
+      config: this.config,
+      log: logger,
+    };
+  }
+
   startScheduler(sender?: MessageSender): void {
     this.scheduler.start(async (task) => {
       const reply = await this.executePrompt(
@@ -69,43 +85,6 @@ export class MercuryCoreRuntime {
 
   stopScheduler(): void {
     this.scheduler.stop();
-  }
-
-  startKbDistill(): void {
-    const intervalMs = this.config.kbDistillIntervalMs;
-    if (intervalMs <= 0) return;
-
-    logger.info("Starting KB distillation", { intervalMs });
-
-    // Run immediately on start, then on interval
-    void this.runKbDistill();
-
-    this.kbDistillTimer = setInterval(() => {
-      void this.runKbDistill();
-    }, intervalMs);
-  }
-
-  stopKbDistill(): void {
-    if (this.kbDistillTimer) {
-      clearInterval(this.kbDistillTimer);
-      this.kbDistillTimer = null;
-    }
-  }
-
-  private async runKbDistill(): Promise<void> {
-    try {
-      logger.info("Running KB distillation");
-      await kbDistill({
-        dataDir: resolveProjectPath(this.config.dataDir),
-        backfill: false,
-      });
-      logger.info("KB distillation complete");
-    } catch (err) {
-      logger.error(
-        "KB distillation failed",
-        err instanceof Error ? err : undefined,
-      );
-    }
   }
 
   async handleRawInput(input: {
@@ -291,7 +270,6 @@ export class MercuryCoreRuntime {
       // 1. Stop schedulers
       logger.info("Shutdown: stopping task scheduler");
       this.scheduler.stop();
-      this.stopKbDistill();
 
       // 2. Drain queue — cancel pending, wait for active
       logger.info("Shutdown: draining group queue");
@@ -312,7 +290,13 @@ export class MercuryCoreRuntime {
         logger.warn("Shutdown: active work did not finish in time");
       }
 
-      // 5. Run registered shutdown hooks (adapters, server, etc.)
+      // 5. Emit extension shutdown hooks
+      if (this.hooks && this.extensionCtx) {
+        logger.info("Shutdown: notifying extensions");
+        await this.hooks.emit("shutdown", {}, this.extensionCtx);
+      }
+
+      // 6. Run registered shutdown hooks (adapters, server, etc.)
       for (const hook of this.shutdownHooks) {
         try {
           await hook();
@@ -352,16 +336,64 @@ export class MercuryCoreRuntime {
         resolveProjectPath(this.config.groupsDir),
         groupId,
       );
-      const history = this.db.getMessagesSinceLastUserTrigger(groupId, 200);
 
-      const reply = await this.containerRunner.reply({
+      // Emit workspace_init hook (extensions should be idempotent)
+      if (this.hooks && this.extensionCtx) {
+        await this.hooks.emit(
+          "workspace_init",
+          { groupId, workspace },
+          this.extensionCtx,
+        );
+      }
+
+      // Emit before_container hook
+      let extraEnv: Record<string, string> | undefined;
+      if (this.hooks && this.extensionCtx) {
+        const result = await this.hooks.emitBeforeContainer(
+          { groupId, prompt, callerId, workspace },
+          this.extensionCtx,
+        );
+        if (result?.block) {
+          return result.block.reason;
+        }
+        if (result?.systemPrompt) {
+          extraEnv = {
+            ...result.env,
+            MERCURY_EXT_SYSTEM_PROMPT: result.systemPrompt,
+          };
+        } else if (result?.env) {
+          extraEnv = result.env;
+        }
+      }
+
+      const history = this.db.getMessagesSinceLastUserTrigger(groupId, 200);
+      const startTime = Date.now();
+
+      let reply = await this.containerRunner.reply({
         groupId,
         groupWorkspace: workspace,
         messages: history,
         prompt,
         callerId,
         attachments,
+        extraEnv,
       });
+
+      const durationMs = Date.now() - startTime;
+
+      // Emit after_container hook
+      if (this.hooks && this.extensionCtx) {
+        const result = await this.hooks.emitAfterContainer(
+          { groupId, prompt, reply, durationMs },
+          this.extensionCtx,
+        );
+        if (result?.suppress) {
+          return "";
+        }
+        if (result?.reply !== undefined) {
+          reply = result.reply;
+        }
+      }
 
       this.db.addMessage(groupId, "assistant", reply);
       return reply;

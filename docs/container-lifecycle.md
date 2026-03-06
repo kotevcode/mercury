@@ -138,7 +138,7 @@ Your image **must** have:
 - `pi` CLI (`@mariozechner/pi-coding-agent`)
 - `agent-browser` CLI
 - `napkin` CLI (`napkin-ai`)
-- `mercury-ctl` (copied during build)
+- `mrctl` (copied during build)
 
 ### Entry Point
 
@@ -152,16 +152,17 @@ ENTRYPOINT ["bun", "run", "/app/src/agent/container-entry.ts"]
 Copy these files into your image at `/app/`:
 ```dockerfile
 COPY src/agent/container-entry.ts /app/src/agent/container-entry.ts
-COPY src/cli/mercury-ctl.ts /app/src/cli/mercury-ctl.ts
+COPY src/cli/mrctl.ts /app/src/cli/mrctl.ts
+COPY src/extensions/reserved.ts /app/src/extensions/reserved.ts
 COPY src/types.ts /app/src/types.ts
 ```
 
-### mercury-ctl Setup
+### mrctl Setup
 
-Create the mercury-ctl wrapper:
+Create the mrctl wrapper:
 ```dockerfile
-RUN echo '#!/bin/sh\nbun run /app/src/cli/mercury-ctl.ts "$@"' > /usr/local/bin/mercury-ctl && \
-    chmod +x /usr/local/bin/mercury-ctl
+RUN echo '#!/bin/sh\nbun run /app/src/cli/mrctl.ts "$@"' > /usr/local/bin/mrctl && \
+    chmod +x /usr/local/bin/mrctl
 ```
 
 ### Volume Mounts
@@ -190,12 +191,13 @@ WORKDIR /app
 
 # Copy Mercury agent files
 COPY src/agent/container-entry.ts /app/src/agent/container-entry.ts
-COPY src/cli/mercury-ctl.ts /app/src/cli/mercury-ctl.ts
+COPY src/cli/mrctl.ts /app/src/cli/mrctl.ts
+COPY src/extensions/reserved.ts /app/src/extensions/reserved.ts
 COPY src/types.ts /app/src/types.ts
 
-# Setup mercury-ctl
-RUN echo '#!/bin/sh\nbun run /app/src/cli/mercury-ctl.ts "$@"' > /usr/local/bin/mercury-ctl && \
-    chmod +x /usr/local/bin/mercury-ctl
+# Setup mrctl
+RUN echo '#!/bin/sh\nbun run /app/src/cli/mrctl.ts "$@"' > /usr/local/bin/mrctl && \
+    chmod +x /usr/local/bin/mrctl
 
 ENTRYPOINT ["bun", "run", "/app/src/agent/container-entry.ts"]
 ```
@@ -206,7 +208,7 @@ When using a custom image (not `mercury-agent:*`), Mercury logs a warning at sta
 ```
 WARN  Using custom agent image
       image: your-image:tag
-      note: Ensure image has: bun, pi, agent-browser, napkin, mercury-ctl
+      note: Ensure image has: bun, pi, agent-browser, napkin, mrctl
 ```
 
 ## API

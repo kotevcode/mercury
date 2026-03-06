@@ -4,6 +4,7 @@ import { resolveRole } from "./permissions.js";
 import {
   config,
   control,
+  extensions,
   groups,
   permissions,
   roles,
@@ -54,6 +55,7 @@ export function createApiApp(apiCtx: ApiContext): Hono<Env> {
   app.route("/roles", roles);
   app.route("/permissions", permissions);
   app.route("/groups", groups);
+  app.route("/ext", extensions);
 
   // ─── Fallback ───────────────────────────────────────────────────────────
 

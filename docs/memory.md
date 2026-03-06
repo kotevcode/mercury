@@ -23,11 +23,11 @@ Each group workspace is a valid Obsidian vault. The agent uses [napkin](https://
 | `entities/` | Entity files (people, places, projects, concepts) |
 | `daily/` | Daily notes for conversation logs |
 
-The structure is created automatically when a group workspace is initialized.
+The structure is created automatically by the napkin extension's `workspace_init` hook when a group workspace is initialized. See `src/extensions/napkin/index.ts`.
 
 ## Agent Capabilities
 
-The agent's system prompt includes instructions for memory operations:
+The agent discovers napkin commands via the napkin skill (`src/extensions/napkin/skill/SKILL.md`), which is loaded by pi on demand:
 
 ### Reading
 
@@ -105,7 +105,7 @@ The vault is plain markdown. You can:
 
 ## Configuration
 
-No additional configuration needed. The vault structure is created automatically in each group workspace.
+No additional configuration needed. The napkin extension is a built-in extension that loads automatically. The vault structure is created by the extension's `workspace_init` hook.
 
 To use a shared Obsidian vault across tools, symlink or mount it:
 

@@ -61,7 +61,8 @@ src/
 │       ├── roles.ts                # /api/roles/* + /api/permissions/*
 │       ├── config.ts               # /api/config/*
 │       ├── groups.ts               # /api/groups/*
-│       └── control.ts              # /api/whoami, /api/stop, /api/compact
+│       ├── control.ts              # /api/whoami, /api/stop, /api/compact
+│       └── extensions.ts           # /api/ext/*
 │
 ├── agent/
 │   ├── container-runner.ts     # Spawns Docker containers
@@ -73,10 +74,27 @@ src/
 │   ├── memory.ts               # Workspace management
 │   └── pi-auth.ts              # Pi OAuth tokens
 │
+├── extensions/
+│   ├── types.ts                # Extension system type definitions
+│   ├── api.ts                  # MercuryExtensionAPI implementation
+│   ├── loader.ts               # Extension discovery + ExtensionRegistry
+│   ├── hooks.ts                # Hook dispatcher (lifecycle events)
+│   ├── jobs.ts                 # Background job runner (interval + cron)
+│   ├── config-registry.ts      # Extension config key registration
+│   ├── skills.ts               # Skill installation (copy to global dir)
+│   ├── image-builder.ts        # Derived Docker image builder
+│   ├── reserved.ts             # Reserved extension names (shared constant)
+│   ├── napkin/                 # Built-in: vault management (CLI + skill + hook)
+│   │   ├── index.ts
+│   │   └── skill/SKILL.md
+│   └── kb-distill/             # Built-in: knowledge extraction (job + widget)
+│       ├── index.ts
+│       └── distill.ts
+│
 ├── cli/
-│   ├── mercury.ts              # Main CLI (init, run, build)
-│   ├── mercury-ctl.ts          # In-container CLI
-│   ├── kb-distill.ts           # KB distillation logic
+│   ├── mercury.ts              # Main CLI (init, run, build, add, remove, ext list)
+│   ├── mrctl.ts                # In-container CLI
+│   ├── kb-distill.ts           # Re-exports from extensions/kb-distill/
 │   └── whatsapp-auth.ts        # WhatsApp QR auth
 │
 └── dashboard/
@@ -88,6 +106,12 @@ container/                  # Dockerfile + build.sh
 resources/
 ├── templates/              # Init templates (AGENTS.md, .env)
 ├── prompts/                # KB distillation prompts
+├── skills/                 # Built-in skills for mrctl commands
+│   ├── tasks/SKILL.md
+│   ├── roles/SKILL.md
+│   ├── permissions/SKILL.md
+│   ├── config/SKILL.md
+│   └── groups/SKILL.md
 └── extensions/             # Pi extensions (subagent)
 ```
 
@@ -103,6 +127,14 @@ resources/
 | `config.ts` | Environment parsing with Zod |
 | `core/api.ts` | Creates API app, mounts route handlers |
 | `core/routes/*.ts` | Individual API route handlers |
+| `extensions/loader.ts` | Extension discovery, loading via Bun import, registry |
+| `extensions/hooks.ts` | Hook dispatch with mutation semantics for before/after_container |
+| `extensions/jobs.ts` | Background job runner — interval and cron scheduling |
+| `extensions/config-registry.ts` | Extension config key registration with validation |
+| `extensions/skills.ts` | Copy extension skills to global dir (not symlink — Docker mount) |
+| `extensions/image-builder.ts` | Derived Docker image with extension CLIs, content-hash cache |
+| `extensions/napkin/index.ts` | Built-in extension: vault dirs, CLI, skill, workspace_init hook |
+| `extensions/kb-distill/index.ts` | Built-in extension: distillation job, config, dashboard widget |
 
 ## Database Schema
 
@@ -110,13 +142,13 @@ Tables in `state.db`:
 - `groups` — Chat groups/channels
 - `messages` — Message history (for ambient context)
 - `tasks` — Scheduled tasks (cron + one-shot at)
-- `roles` — User role assignments
-- `permissions` — Role permission sets
-- `config` — Per-group config overrides
+- `group_roles` — User role assignments per group
+- `group_config` — Per-group config overrides + role permission sets
+- `extension_state` — Scoped key-value store for extensions `(extension, key) → value`
 
 ## API
 
-Internal API used by `mercury-ctl` from inside containers:
+Internal API used by `mrctl` from inside containers:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -131,8 +163,43 @@ Internal API used by `mercury-ctl` from inside containers:
 | `/api/config` | GET/POST | Group config |
 | `/api/stop` | POST | Abort current run |
 | `/api/compact` | POST | Session boundary |
+| `/api/ext` | GET | List installed extensions |
+| `/api/ext/:name/auth` | POST | Permission check for extension CLI |
 
 Auth: `X-Mercury-Caller` + `X-Mercury-Group` headers.
+
+## Extension System
+
+Mercury has a TypeScript extension system. Extensions live in `.mercury/extensions/*/` and export a setup function:
+
+```typescript
+import type { MercuryExtensionAPI } from "../extensions/types.js";
+
+export default function(mercury: MercuryExtensionAPI) {
+  mercury.cli({ name: "napkin", install: "bun add -g napkin-ai" });
+  mercury.permission({ defaultRoles: ["admin", "member"] });
+  mercury.skill("./skill");
+  mercury.on("workspace_init", async (event, ctx) => { ... });
+  mercury.job("distill", { interval: 3600_000, run: async (ctx) => { ... } });
+  mercury.config("enabled", { description: "...", default: "true" });
+  mercury.widget({ label: "Status", render: (ctx) => "<p>OK</p>" });
+  mercury.store.get("key");
+}
+```
+
+Key types are in `src/extensions/types.ts`. See [docs/extensions.md](docs/extensions.md) for the full design.
+
+### Built-in vs extension commands
+
+`mrctl` has two types of commands:
+- **Built-in**: `tasks`, `roles`, `permissions`, `config`, `groups`, `stop`, `compact` — HTTP calls to host API
+- **Extension**: `mrctl <ext-name> <args>` — permission check then local CLI exec in container
+
+Built-in names are reserved — extensions cannot collide with them.
+
+### Permissions
+
+Permissions are now dynamic. Built-in permissions are static; extensions register new ones at runtime via `registerPermission()`. Admin always gets all permissions. See `src/core/permissions.ts`.
 
 ## Docs
 
@@ -147,6 +214,7 @@ Auth: `X-Mercury-Caller` + `X-Mercury-Group` headers.
 | [graceful-shutdown.md](docs/graceful-shutdown.md) | Shutdown sequence |
 | [rate-limiting.md](docs/rate-limiting.md) | Rate limits |
 | [media/overview.md](docs/media/overview.md) | Media handling |
+| [extensions.md](docs/extensions.md) | Extension system design |
 
 ## Conventions
 

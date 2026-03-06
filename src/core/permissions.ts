@@ -1,6 +1,10 @@
 import type { Db } from "../storage/db.js";
 
-export const ALL_PERMISSIONS = [
+// ---------------------------------------------------------------------------
+// Built-in permissions (static, cannot be overridden)
+// ---------------------------------------------------------------------------
+
+const BUILT_IN_PERMISSIONS = new Set([
   "prompt",
   "stop",
   "compact",
@@ -19,17 +23,64 @@ export const ALL_PERMISSIONS = [
   "groups.list",
   "groups.rename",
   "groups.delete",
-] as const;
+]);
 
-export type Permission = (typeof ALL_PERMISSIONS)[number];
+// ---------------------------------------------------------------------------
+// Extension-registered permissions (dynamic, added at runtime)
+// ---------------------------------------------------------------------------
 
-const PERMISSION_SET = new Set<string>(ALL_PERMISSIONS);
+const registeredPermissions = new Map<string, { defaultRoles: string[] }>();
+
+/**
+ * Register a new permission from an extension.
+ * Throws if the name collides with a built-in permission.
+ */
+export function registerPermission(
+  name: string,
+  opts: { defaultRoles: string[] },
+): void {
+  if (BUILT_IN_PERMISSIONS.has(name)) {
+    throw new Error(
+      `Permission "${name}" is a built-in and cannot be overridden`,
+    );
+  }
+  registeredPermissions.set(name, opts);
+}
+
+/**
+ * Get all valid permission names (built-in + extension-registered).
+ */
+export function getAllPermissions(): string[] {
+  return [...BUILT_IN_PERMISSIONS, ...registeredPermissions.keys()];
+}
+
+/**
+ * Check if a permission name is valid (built-in or registered).
+ */
+export function isValidPermission(name: string): boolean {
+  return BUILT_IN_PERMISSIONS.has(name) || registeredPermissions.has(name);
+}
+
+/**
+ * Clear all registered extension permissions. For test isolation only.
+ */
+export function resetPermissions(): void {
+  registeredPermissions.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Seeded groups tracking
+// ---------------------------------------------------------------------------
 
 /**
  * Tracks which groups have had admins seeded to avoid redundant DB calls.
  * Exported for test isolation (tests should clear this in beforeEach).
  */
 export const seededGroups = new Set<string>();
+
+// ---------------------------------------------------------------------------
+// System callers
+// ---------------------------------------------------------------------------
 
 /**
  * System callers — these identities get full permissions without DB lookup.
@@ -41,24 +92,54 @@ export function isSystemCaller(callerId: string): boolean {
   return SYSTEM_CALLERS.has(callerId);
 }
 
-/** Built-in defaults — used when no per-group overrides exist */
-const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
-  admin: [...ALL_PERMISSIONS],
-  member: ["prompt"],
-};
+// ---------------------------------------------------------------------------
+// Default role permissions
+// ---------------------------------------------------------------------------
+
+/** Built-in defaults for the member role */
+const DEFAULT_MEMBER_PERMISSIONS = new Set(["prompt"]);
+
+/**
+ * Compute the default permission set for a role, merging built-in defaults
+ * with extension-registered defaults.
+ *
+ * - `admin` and `system` get all permissions (built-in + extension)
+ * - `member` gets ["prompt"] + any extension permissions that list "member" in defaultRoles
+ * - Other roles get extension permissions that list them in defaultRoles
+ */
+function getDefaultPermissions(role: string): Set<string> {
+  if (role === "admin" || role === "system") {
+    return new Set(getAllPermissions());
+  }
+
+  const perms = new Set<string>(
+    role === "member" ? DEFAULT_MEMBER_PERMISSIONS : [],
+  );
+
+  for (const [name, opts] of registeredPermissions) {
+    if (opts.defaultRoles.includes(role)) {
+      perms.add(name);
+    }
+  }
+
+  return perms;
+}
+
+// ---------------------------------------------------------------------------
+// Permission resolution
+// ---------------------------------------------------------------------------
 
 /**
  * Load the permission set for a role in a group.
  * Checks group_config for "role.<name>.permissions" override,
- * falls back to built-in defaults.
+ * falls back to defaults (built-in + extension).
  */
 export function getRolePermissions(
   db: Db,
   groupId: string,
   role: string,
-): Set<Permission> {
-  // System role always has full permissions — not configurable
-  if (role === "system") return new Set(ALL_PERMISSIONS);
+): Set<string> {
+  if (role === "system") return getDefaultPermissions("system");
 
   const key = `role.${role}.permissions`;
   const stored = db.getGroupConfig(groupId, key);
@@ -67,20 +148,18 @@ export function getRolePermissions(
     const perms = stored
       .split(",")
       .map((s) => s.trim())
-      .filter((s) => PERMISSION_SET.has(s));
-    return new Set(perms as Permission[]);
+      .filter((s) => isValidPermission(s));
+    return new Set(perms);
   }
 
-  const defaults = DEFAULT_ROLE_PERMISSIONS[role];
-  if (defaults) return new Set(defaults);
-  return new Set();
+  return getDefaultPermissions(role);
 }
 
 export function hasPermission(
   db: Db,
   groupId: string,
   role: string,
-  permission: Permission,
+  permission: string,
 ): boolean {
   return getRolePermissions(db, groupId, role).has(permission);
 }

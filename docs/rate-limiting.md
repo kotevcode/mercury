@@ -39,11 +39,11 @@ export MERCURY_RATE_LIMIT_WINDOW_MS=60000
 
 ## Per-Group Override
 
-Groups can set a custom limit via `mercury-ctl` or the API:
+Groups can set a custom limit via `mrctl` or the API:
 
 ```bash
 # Inside agent container (group context is automatic)
-mercury-ctl config set rate_limit 5
+mrctl config set rate_limit 5
 
 # Via API with explicit group
 curl -X PUT http://localhost:8787/api/config \

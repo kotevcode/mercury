@@ -1,18 +1,22 @@
 import { Hono } from "hono";
 import { html, raw } from "hono/html";
 import { streamSSE } from "hono/streaming";
+import type { ExtensionRegistry } from "../../extensions/loader.js";
+import type { MercuryExtensionContext } from "../../extensions/types.js";
 import type { MercuryCoreRuntime } from "../runtime.js";
 
 interface DashboardContext {
   core: MercuryCoreRuntime;
   adapters: Record<string, boolean>;
   startTime: number;
+  registry?: ExtensionRegistry;
+  extensionCtx?: MercuryExtensionContext;
 }
 
 type HealthStatus = "healthy" | "degraded" | "critical";
 
 export function createDashboardRoutes(ctx: DashboardContext) {
-  const { core, adapters, startTime } = ctx;
+  const { core, adapters, startTime, registry, extensionCtx } = ctx;
   const app = new Hono();
 
   // ─── Helpers ────────────────────────────────────────────────────────────
@@ -118,6 +122,46 @@ export function createDashboardRoutes(ctx: DashboardContext) {
       message: "All systems operational",
       lastError,
     };
+  }
+
+  function renderExtensionWidgets(): string {
+    if (!registry || !extensionCtx) return "";
+
+    const allWidgets: Array<{ extName: string; label: string; html: string }> =
+      [];
+    for (const ext of registry.list()) {
+      for (const widget of ext.widgets) {
+        try {
+          const widgetHtml = widget.render(extensionCtx);
+          allWidgets.push({
+            extName: ext.name,
+            label: widget.label,
+            html: widgetHtml,
+          });
+        } catch {
+          allWidgets.push({
+            extName: ext.name,
+            label: widget.label,
+            html: '<p class="muted">Error rendering widget</p>',
+          });
+        }
+      }
+    }
+
+    if (allWidgets.length === 0) return "";
+
+    const widgetPanels = allWidgets
+      .map(
+        (w) => `
+        <div class="panel">
+          <div class="panel-header">${escapeHtml(w.label)} <span class="muted">${escapeHtml(w.extName)}</span></div>
+          <div class="panel-body">${w.html}</div>
+        </div>
+      `,
+      )
+      .join("");
+
+    return `<div class="grid-2">${widgetPanels}</div>`;
   }
 
   // ─── Page Routes (htmx content swapping) ────────────────────────────────
@@ -290,6 +334,8 @@ export function createDashboardRoutes(ctx: DashboardContext) {
           </div>
         </div>
       </div>
+
+      ${raw(renderExtensionWidgets())}
     `);
   });
 

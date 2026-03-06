@@ -4,17 +4,20 @@ import { spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import { RESERVED_EXTENSION_NAMES } from "../extensions/reserved.js";
 import { kbDistill } from "./kb-distill.js";
 import { authenticate } from "./whatsapp-auth.js";
 
@@ -22,6 +25,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = join(__dirname, "../..");
 const CWD = process.cwd();
 const TEMPLATES_DIR = join(PACKAGE_ROOT, "resources/templates");
+const VALID_EXT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 function getVersion(): string {
   try {
@@ -143,7 +147,8 @@ function initAction(): void {
     "src/agent/container-entry.ts",
     "src/agent/container-entry.ts",
   );
-  copySourceFile("src/cli/mercury-ctl.ts", "src/cli/mercury-ctl.ts");
+  copySourceFile("src/cli/mrctl.ts", "src/cli/mrctl.ts");
+  copySourceFile("src/extensions/reserved.ts", "src/extensions/reserved.ts");
   copySourceFile("src/types.ts", "src/types.ts");
 
   // Build container
@@ -755,5 +760,453 @@ serviceCommand
   .description("View service logs")
   .option("-f, --follow", "Follow log output")
   .action(serviceLogsAction);
+
+// ─── Extension management ─────────────────────────────────────────────────
+
+function getDataDir(): string {
+  const envPath = join(CWD, ".env");
+  if (existsSync(envPath)) {
+    const envVars = loadEnvFile(envPath);
+    if (envVars.MERCURY_DATA_DIR) return envVars.MERCURY_DATA_DIR;
+  }
+  return ".mercury";
+}
+
+function getUserExtensionsDir(): string {
+  return join(CWD, getDataDir(), "extensions");
+}
+
+function getGlobalDir(): string {
+  const envPath = join(CWD, ".env");
+  if (existsSync(envPath)) {
+    const envVars = loadEnvFile(envPath);
+    if (envVars.MERCURY_GLOBAL_DIR) return envVars.MERCURY_GLOBAL_DIR;
+  }
+  return join(CWD, getDataDir(), "global");
+}
+
+/**
+ * Resolve an extension source to a local directory path.
+ *
+ * Supports:
+ * - Local paths: `./path/to/extension` or `/absolute/path`
+ * - npm packages: `npm:<package-name>`
+ * - git repos: `git:<url>`
+ *
+ * For npm/git, downloads to a temp dir and returns that path.
+ * Returns { dir, name, cleanup } — call cleanup() to remove temp dirs.
+ */
+function resolveExtensionSource(source: string): {
+  dir: string;
+  name: string;
+  cleanup: () => void;
+} {
+  // npm: prefix
+  if (source.startsWith("npm:")) {
+    const pkg = source.slice(4);
+    const name = pkg.includes("/") ? pkg.split("/").pop()! : pkg;
+    const tmp = join(tmpdir(), `mercury-ext-npm-${Date.now()}`);
+    mkdirSync(tmp, { recursive: true });
+
+    console.log(`Fetching ${pkg} from npm...`);
+    const packResult = spawnSync(
+      "npm",
+      ["pack", pkg, "--pack-destination", tmp],
+      {
+        stdio: ["pipe", "pipe", "pipe"],
+        cwd: tmp,
+      },
+    );
+    if (packResult.status !== 0) {
+      rmSync(tmp, { recursive: true, force: true });
+      console.error(`Error: failed to fetch npm package "${pkg}"`);
+      console.error(packResult.stderr?.toString().trim());
+      process.exit(1);
+    }
+
+    // Find the tarball
+    const tarballs = readdirSync(tmp).filter((f) => f.endsWith(".tgz"));
+    if (tarballs.length === 0) {
+      rmSync(tmp, { recursive: true, force: true });
+      console.error(`Error: npm pack produced no tarball for "${pkg}"`);
+      process.exit(1);
+    }
+
+    // Extract tarball
+    const tarball = join(tmp, tarballs[0]);
+    const extractDir = join(tmp, "extracted");
+    mkdirSync(extractDir, { recursive: true });
+    const extractResult = spawnSync(
+      "tar",
+      ["xzf", tarball, "-C", extractDir, "--strip-components=1"],
+      {
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
+    if (extractResult.status !== 0) {
+      rmSync(tmp, { recursive: true, force: true });
+      console.error(`Error: failed to extract tarball for "${pkg}"`);
+      process.exit(1);
+    }
+
+    return {
+      dir: extractDir,
+      name,
+      cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    };
+  }
+
+  // git: prefix
+  if (source.startsWith("git:")) {
+    const url = source.slice(4);
+    // Accept git:github.com/user/repo or git:https://github.com/user/repo
+    const gitUrl = url.startsWith("http") ? url : `https://${url}`;
+    const name = basename(gitUrl).replace(/\.git$/, "");
+    const tmp = join(tmpdir(), `mercury-ext-git-${Date.now()}`);
+
+    console.log(`Cloning ${gitUrl}...`);
+    const cloneResult = spawnSync(
+      "git",
+      ["clone", "--depth", "1", gitUrl, tmp],
+      {
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
+    if (cloneResult.status !== 0) {
+      rmSync(tmp, { recursive: true, force: true });
+      console.error(`Error: failed to clone "${gitUrl}"`);
+      console.error(cloneResult.stderr?.toString().trim());
+      process.exit(1);
+    }
+
+    return {
+      dir: tmp,
+      name,
+      cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    };
+  }
+
+  // Local path
+  const absPath = resolve(CWD, source);
+  if (!existsSync(absPath)) {
+    console.error(`Error: path not found: ${source}`);
+    process.exit(1);
+  }
+  if (!existsSync(join(absPath, "index.ts"))) {
+    console.error(`Error: no index.ts found in ${source}`);
+    process.exit(1);
+  }
+
+  const name = basename(absPath);
+  return { dir: absPath, name, cleanup: () => {} };
+}
+
+/**
+ * Validate extension before installation.
+ */
+function validateExtension(
+  name: string,
+  sourceDir: string,
+  extensionsDir: string,
+): void {
+  // Name format
+  if (!VALID_EXT_NAME_RE.test(name)) {
+    console.error(
+      `Error: invalid extension name "${name}" (must be lowercase alphanumeric + hyphens)`,
+    );
+    process.exit(1);
+  }
+
+  // Reserved name
+  if (RESERVED_EXTENSION_NAMES.has(name)) {
+    console.error(`Error: "${name}" is a reserved built-in command name`);
+    process.exit(1);
+  }
+
+  // index.ts must exist
+  if (!existsSync(join(sourceDir, "index.ts"))) {
+    console.error(`Error: no index.ts found in extension source`);
+    process.exit(1);
+  }
+
+  // Already installed
+  if (existsSync(join(extensionsDir, name))) {
+    console.error(
+      `Error: extension "${name}" is already installed. Run 'mercury remove ${name}' first.`,
+    );
+    process.exit(1);
+  }
+}
+
+/**
+ * Try loading an extension to check for syntax/import errors.
+ */
+async function dryRunExtension(dir: string, name: string): Promise<void> {
+  const indexPath = join(dir, "index.ts");
+  try {
+    const mod = await import(indexPath);
+    if (typeof mod.default !== "function") {
+      console.error(`Error: ${name}/index.ts must export a default function`);
+      process.exit(1);
+    }
+  } catch (err) {
+    console.error(`Error: failed to load ${name}/index.ts:`);
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+}
+
+/**
+ * Install skill files for a newly added extension.
+ */
+function installSkillIfPresent(extDir: string, name: string): boolean {
+  const skillDir = join(extDir, "skill");
+  if (!existsSync(join(skillDir, "SKILL.md"))) return false;
+
+  const globalDir = getGlobalDir();
+  const dst = join(globalDir, "skills", name);
+  mkdirSync(dirname(dst), { recursive: true });
+  rmSync(dst, { recursive: true, force: true });
+  cpSync(skillDir, dst, { recursive: true });
+  return true;
+}
+
+/**
+ * Read extension metadata by doing a quick dry-run load.
+ * Returns partial info for the install report.
+ */
+async function readExtensionInfo(dir: string): Promise<{
+  hasCli: boolean;
+  hasSkill: boolean;
+  cliName?: string;
+  installCmd?: string;
+  permissionRoles?: string[];
+}> {
+  const { MercuryExtensionAPIImpl } = await import("../extensions/api.js");
+  const { Db } = await import("../storage/db.js");
+
+  // Create a temporary in-memory DB for dry-run
+  const tmpDbPath = join(tmpdir(), `mercury-dryrun-${Date.now()}.db`);
+  const db = new Db(tmpDbPath);
+  try {
+    const name = basename(dir);
+    const api = new MercuryExtensionAPIImpl(name, dir, db);
+    const mod = await import(join(dir, "index.ts"));
+    try {
+      mod.default(api);
+    } catch {
+      // Best-effort — some extensions may fail without full runtime
+    }
+    const meta = api.getMeta();
+    return {
+      hasCli: !!meta.cli,
+      hasSkill: !!meta.skillDir,
+      cliName: meta.cli?.name,
+      installCmd: meta.cli?.install,
+      permissionRoles: meta.permission?.defaultRoles,
+    };
+  } finally {
+    db.close();
+    rmSync(tmpDbPath, { force: true });
+  }
+}
+
+async function addAction(source: string): Promise<void> {
+  const extensionsDir = getUserExtensionsDir();
+  mkdirSync(extensionsDir, { recursive: true });
+
+  const { dir: sourceDir, name, cleanup } = resolveExtensionSource(source);
+
+  try {
+    // Validate
+    validateExtension(name, sourceDir, extensionsDir);
+
+    // Dry-run load to catch errors early
+    await dryRunExtension(sourceDir, name);
+
+    // Copy to extensions dir
+    const destDir = join(extensionsDir, name);
+    cpSync(sourceDir, destDir, { recursive: true });
+
+    // Install dependencies if package.json present
+    if (existsSync(join(destDir, "package.json"))) {
+      console.log("Installing dependencies...");
+      const installResult = spawnSync("bun", ["install"], {
+        stdio: "inherit",
+        cwd: destDir,
+      });
+      if (installResult.status !== 0) {
+        console.error("Warning: dependency installation failed");
+      }
+    }
+
+    // Install skill
+    const hasSkill = installSkillIfPresent(destDir, name);
+
+    // Read extension info for report
+    let info: Awaited<ReturnType<typeof readExtensionInfo>>;
+    try {
+      info = await readExtensionInfo(destDir);
+    } catch {
+      info = { hasCli: false, hasSkill: hasSkill };
+    }
+
+    // Report
+    console.log(`\n✓ Extension "${name}" installed`);
+    if (info.hasCli) {
+      console.log(`  CLI: ${info.cliName} (available after image rebuild)`);
+    }
+    if (hasSkill) {
+      console.log(`  Skill: ${name} (available to agent)`);
+    }
+    if (info.permissionRoles) {
+      console.log(
+        `  Permission: ${name} (default: ${info.permissionRoles.join(", ")})`,
+      );
+    }
+
+    if (info.hasCli) {
+      console.log("\nRebuild the agent image to include the CLI:");
+      console.log("  mercury build");
+    }
+
+    console.log("\nRestart mercury to activate:");
+    console.log("  mercury service restart");
+  } catch (err) {
+    // Rollback on unexpected error
+    const destDir = join(extensionsDir, name);
+    if (existsSync(destDir)) {
+      rmSync(destDir, { recursive: true, force: true });
+    }
+    throw err;
+  } finally {
+    cleanup();
+  }
+}
+
+function removeAction(name: string): void {
+  const extensionsDir = getUserExtensionsDir();
+  const extDir = join(extensionsDir, name);
+
+  if (!existsSync(extDir)) {
+    console.error(`Error: extension "${name}" is not installed`);
+    process.exit(1);
+  }
+
+  // Remove skill
+  const globalDir = getGlobalDir();
+  const skillDst = join(globalDir, "skills", name);
+  if (existsSync(skillDst)) {
+    rmSync(skillDst, { recursive: true });
+  }
+
+  // Remove extension
+  rmSync(extDir, { recursive: true });
+
+  console.log(`✓ Extension "${name}" removed`);
+  console.log("\nRestart mercury to apply:");
+  console.log("  mercury service restart");
+}
+
+function extensionsListAction(): void {
+  const userExtDir = getUserExtensionsDir();
+  const builtinExtDir = join(__dirname, "..", "extensions");
+
+  const extensions: Array<{
+    name: string;
+    features: string[];
+    description: string;
+    builtin: boolean;
+  }> = [];
+
+  // Scan a directory for extensions
+  function scanDir(dir: string, builtin: boolean): void {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const name = entry.name;
+      if (!VALID_EXT_NAME_RE.test(name)) continue;
+      if (RESERVED_EXTENSION_NAMES.has(name)) continue;
+
+      const extDir = join(dir, name);
+      if (!existsSync(join(extDir, "index.ts"))) continue;
+
+      const features: string[] = [];
+      if (existsSync(join(extDir, "skill", "SKILL.md"))) features.push("Skill");
+
+      // Read SKILL.md for description
+      let description = "";
+      const skillMd = join(extDir, "skill", "SKILL.md");
+      if (existsSync(skillMd)) {
+        const content = readFileSync(skillMd, "utf-8");
+        const descMatch = content.match(
+          /^description:\s*(.+?)(?:\n[a-z]|\n---)/ms,
+        );
+        if (descMatch) {
+          description = descMatch[1].replace(/\n\s*/g, " ").trim();
+        }
+      }
+
+      extensions.push({ name, features, description, builtin });
+    }
+  }
+
+  scanDir(userExtDir, false);
+  scanDir(builtinExtDir, true);
+
+  if (extensions.length === 0) {
+    console.log("No extensions installed.");
+    console.log("\nInstall one with:");
+    console.log("  mercury add ./path/to/extension");
+    console.log("  mercury add npm:<package>");
+    console.log("  mercury add git:<repo-url>");
+    return;
+  }
+
+  // Sort: user extensions first, then built-in, alphabetically within
+  extensions.sort((a, b) => {
+    if (a.builtin !== b.builtin) return a.builtin ? 1 : -1;
+    return a.name.localeCompare(b.name);
+  });
+
+  // Calculate column widths
+  const nameWidth = Math.max(12, ...extensions.map((e) => e.name.length));
+  const featWidth = Math.max(
+    10,
+    ...extensions.map((e) => e.features.join(" + ").length || 3),
+  );
+
+  for (const ext of extensions) {
+    const features = ext.features.length > 0 ? ext.features.join(" + ") : "—";
+    const tag = ext.builtin ? " (built-in)" : "";
+    const desc = ext.description
+      ? `  ${ext.description.slice(0, 60)}${ext.description.length > 60 ? "…" : ""}`
+      : "";
+    console.log(
+      `${ext.name.padEnd(nameWidth)}  ${features.padEnd(featWidth)}${tag}${desc}`,
+    );
+  }
+}
+
+// Extension commands
+program
+  .command("add <source>")
+  .description("Install an extension (local path, npm:<pkg>, or git:<url>)")
+  .action(addAction);
+
+program
+  .command("remove <name>")
+  .description("Remove an installed extension")
+  .action(removeAction);
+
+const extCommand = program
+  .command("extensions")
+  .alias("ext")
+  .description("Manage extensions");
+
+extCommand
+  .command("list")
+  .description("List installed extensions")
+  .action(extensionsListAction);
 
 program.parse();

@@ -1,3 +1,5 @@
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { type Adapter, Chat, type Message, type Thread } from "chat";
 import { createDiscordMessageHandler } from "./adapters/discord.js";
@@ -5,10 +7,20 @@ import { setupAdapters } from "./adapters/setup.js";
 import { createSlackMessageHandler } from "./adapters/slack.js";
 import { loadConfig, resolveProjectPath } from "./config.js";
 import { MercuryCoreRuntime } from "./core/runtime.js";
+import { ConfigRegistry } from "./extensions/config-registry.js";
+import { ensureDerivedImage } from "./extensions/image-builder.js";
+import { JobRunner } from "./extensions/jobs.js";
+import { ExtensionRegistry } from "./extensions/loader.js";
+import {
+  installBuiltinSkills,
+  installExtensionSkills,
+} from "./extensions/skills.js";
 import { createWhatsAppMessageHandler } from "./handlers/whatsapp.js";
 import { configureLogger, logger } from "./logger.js";
 import { createApp } from "./server.js";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PACKAGE_ROOT = join(__dirname, "..");
 const startTime = Date.now();
 
 async function main() {
@@ -23,6 +35,41 @@ async function main() {
 
   const core = new MercuryCoreRuntime(config);
   await core.initialize();
+
+  // ─── Load Extensions ────────────────────────────────────────────────────
+
+  const registry = new ExtensionRegistry();
+  const configRegistry = new ConfigRegistry();
+  const extensionsDir = resolveProjectPath(`${config.dataDir}/extensions`);
+  const builtinExtDir = join(__dirname, "extensions");
+  await registry.loadAll(
+    extensionsDir,
+    core.db,
+    logger,
+    configRegistry,
+    builtinExtDir,
+  );
+  logger.info("Extensions loaded", { count: registry.size });
+
+  // Wire extensions into runtime (hooks, context)
+  core.initExtensions(registry);
+
+  // Install skills (extension + built-in)
+  const globalDir = resolveProjectPath(config.globalDir);
+  installExtensionSkills(registry.list(), globalDir, logger);
+  installBuiltinSkills(
+    join(PACKAGE_ROOT, "resources/skills"),
+    globalDir,
+    logger,
+  );
+
+  // Build derived container image if extensions declare CLIs
+  const agentImage = await ensureDerivedImage(
+    config.agentContainerImage,
+    registry.list(),
+    logger,
+  );
+  core.containerRunner.setImage(agentImage);
 
   // ─── Setup Adapters ─────────────────────────────────────────────────────
 
@@ -112,7 +159,16 @@ async function main() {
   // ─── Start Services ─────────────────────────────────────────────────────
 
   core.startScheduler(messageSender);
-  core.startKbDistill();
+
+  // Start extension background jobs
+  const jobRunner = new JobRunner();
+  jobRunner.start(registry.list(), {
+    db: core.db,
+    config,
+    log: logger,
+  });
+  core.onShutdown(() => jobRunner.stop());
+
   await bot.initialize();
 
   // ─── Create HTTP Server ─────────────────────────────────────────────────
@@ -131,6 +187,8 @@ async function main() {
     adapters,
     webhooks,
     startTime,
+    registry,
+    configRegistry,
   });
 
   const server = Bun.serve({
