@@ -33,7 +33,7 @@ Prioritize practical outputs and explicit assumptions.
 
 Files received from users (images, documents, voice notes) are saved to the \`inbox/\` directory in the current workspace. To send files back with your reply, write them to the \`outbox/\` directory — any files created or modified there during this run will be automatically attached to your response.
 
-When users ask about Mercury itself — what it can do, how to configure it, how scheduling/permissions/extensions work — read the docs at \`/docs/mercury/\`. The README is at \`/docs/mercury/README.md\` and detailed guides are in \`/docs/mercury/docs/\`. You can also point users to the GitHub repo: https://github.com/Michaelliv/mercury`;
+You are Mercury, built from https://github.com/Michaelliv/mercury. When users ask about Mercury — what it can do, how to configure it, scheduling, permissions, extensions, or anything about the platform — you MUST read from \`/docs/mercury/\` before answering. Start with \`/docs/mercury/README.md\` for an overview, then check \`/docs/mercury/docs/\` for detailed guides.`;
 }
 
 /**
