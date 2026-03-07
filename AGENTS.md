@@ -31,6 +31,7 @@ This provides auto-restart on crash and proper system integration. See [deployme
 src/
 ├── main.ts                 # Entry point — bootstraps everything
 ├── server.ts               # Hono HTTP server factory
+├── chat-shim.ts            # Minimal ChatInstance shim (replaces Chat SDK routing)
 ├── config.ts               # Zod schema + env parsing
 ├── logger.ts               # Pino logger
 ├── types.ts                # Shared types
@@ -46,7 +47,8 @@ src/
 ├── bridges/                # Platform bridge implementations
 │   ├── whatsapp.ts             # WhatsApp PlatformBridge
 │   ├── discord.ts              # Discord PlatformBridge
-│   └── slack.ts                # Slack PlatformBridge
+│   ├── slack.ts                # Slack PlatformBridge
+│   └── teams.ts                # Teams PlatformBridge
 │
 ├── core/
 │   ├── runtime.ts              # Main orchestrator
@@ -91,13 +93,7 @@ src/
 │   ├── config-registry.ts      # Extension config key registration
 │   ├── skills.ts               # Skill installation (copy to global dir)
 │   ├── image-builder.ts        # Derived Docker image builder
-│   ├── reserved.ts             # Reserved extension names (shared constant)
-│   ├── napkin/                 # Built-in: vault management (CLI + skill + hook)
-│   │   ├── index.ts
-│   │   └── skill/SKILL.md
-│   └── kb-distill/             # Built-in: knowledge extraction (job + widget)
-│       ├── index.ts
-│       └── distill.ts
+│   └── reserved.ts             # Reserved extension names (shared constant)
 │
 ├── cli/
 │   ├── mercury.ts              # Main CLI (init, run, build, add, remove, ext list)
@@ -141,8 +137,7 @@ resources/
 | `extensions/config-registry.ts` | Extension config key registration with validation |
 | `extensions/skills.ts` | Copy extension skills to global dir (not symlink — Docker mount) |
 | `extensions/image-builder.ts` | Derived Docker image with extension CLIs, content-hash cache |
-| `extensions/napkin/index.ts` | Built-in extension: vault dirs, CLI, skill, workspace_init hook |
-| `extensions/kb-distill/index.ts` | Built-in extension: distillation job, config, dashboard widget |
+| `chat-shim.ts` | Minimal ChatInstance shim for adapter initialization |
 | `core/handler.ts` | Unified message handler — platform-agnostic, uses PlatformBridge |
 | `core/media.ts` | Shared media utilities — MIME detection, URL downloader |
 | `core/outbox.ts` | Outbox scanner — detects new/modified files by mtime |
@@ -216,7 +211,7 @@ export default function(mercury: MercuryExtensionAPI) {
   mercury.cli({ name: "napkin", install: "bun add -g napkin-ai" });
   mercury.permission({ defaultRoles: ["admin", "member"] });
   mercury.skill("./skill");
-  mercury.on("workspace_init", async (event, ctx) => { ... });
+  mercury.on("workspace_init", async ({ workspace, containerWorkspace }, ctx) => { ... });
   mercury.job("distill", { interval: 3600_000, run: async (ctx) => { ... } });
   mercury.config("enabled", { description: "...", default: "true" });
   mercury.widget({ label: "Status", render: (ctx) => "<p>OK</p>" });

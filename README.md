@@ -26,21 +26,41 @@ mercury init
 Edit `.env`:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
+MERCURY_ANTHROPIC_API_KEY=sk-ant-...
+MERCURY_CHATSDK_USERNAME=Mercury
+MERCURY_TRIGGER_PATTERNS=@Mercury,Mercury
 
 # Enable adapters
 MERCURY_ENABLE_WHATSAPP=true
 MERCURY_ENABLE_DISCORD=true
-DISCORD_BOT_TOKEN=your-bot-token
+MERCURY_DISCORD_BOT_TOKEN=your-bot-token
 ```
 
-Run:
+Start:
 
 ```bash
 mercury run
+# or install as a background service:
+mercury service install
 ```
 
-Scan the QR code with WhatsApp. You're live.
+### Set up spaces and conversations
+
+Mercury discovers conversations from incoming traffic. They start **unlinked** — you assign them to **spaces** (memory boundaries).
+
+```bash
+# Create spaces
+mercury spaces create main
+mercury spaces create work
+mercury spaces create family
+
+# Send a message from WhatsApp/Discord/Slack, then:
+mercury conversations              # See discovered conversations
+mercury conversations --unlinked   # See unlinked ones
+mercury link <id> main             # Link a conversation to a space
+```
+
+Multiple conversations can point at the same space — they share memory, session, and vault.
 
 ---
 
@@ -176,7 +196,7 @@ Mercury supports TypeScript extensions that add CLIs, skills, background jobs, l
 ├── napkin/
 │   ├── index.ts
 │   └── skill/SKILL.md
-└── kb-distill/
+└── my-extension/
     └── index.ts
 ```
 
@@ -187,7 +207,10 @@ export default function(mercury) {
   mercury.cli({ name: "napkin", install: "bun add -g napkin-ai" });
   mercury.permission({ defaultRoles: ["admin", "member"] });
   mercury.skill("./skill");
-  mercury.on("workspace_init", async ({ workspace }) => { ... });
+  mercury.on("workspace_init", async ({ workspace, containerWorkspace }) => { ... });
+  mercury.on("before_container", async ({ workspace, containerWorkspace }) => {
+    return { env: { MY_VAR: containerWorkspace + "/data" } };
+  });
 }
 ```
 

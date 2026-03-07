@@ -31,7 +31,7 @@ export default function(mercury: MercuryExtensionAPI) {
   mercury.permission({ defaultRoles: ["admin", "member"] });
   mercury.skill("./skill");
 
-  mercury.on("workspace_init", async ({ workspace }) => {
+  mercury.on("workspace_init", async ({ workspace, containerWorkspace }) => {
     mkdirSync(join(workspace, "entities"), { recursive: true });
   });
 
@@ -104,6 +104,8 @@ Subscribe to lifecycle events.
 
 ```typescript
 mercury.on("workspace_init", async (event, ctx) => {
+  // event.workspace — absolute host path
+  // event.containerWorkspace — container-relative path (e.g. /spaces/main)
   mkdirSync(join(event.workspace, "my-dir"), { recursive: true });
 });
 ```
@@ -118,13 +120,17 @@ mercury.on("workspace_init", async (event, ctx) => {
 | `before_container` | About to spawn container | Yes |
 | `after_container` | Container finished | Yes |
 
+Both `workspace_init` and `before_container` events include:
+- `workspace` — absolute host path (for file operations on the host)
+- `containerWorkspace` — container-relative path, e.g. `/spaces/main` (for env vars passed into the container)
+
 #### `before_container` mutations
 
 ```typescript
 mercury.on("before_container", async (event, ctx) => {
   return {
     systemPrompt: "Extra instructions...",  // appended to system prompt
-    env: { MY_VAR: "value" },               // extra container env vars
+    env: { MY_VAR: event.containerWorkspace + "/data" },  // container-relative paths
     block: { reason: "Rate limited" },       // prevent container from running
   };
 });
