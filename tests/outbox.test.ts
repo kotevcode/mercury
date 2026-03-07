@@ -31,7 +31,7 @@ describe("scanOutbox", () => {
     const outboxDir = path.join(tmpDir, "outbox");
     fs.mkdirSync(outboxDir);
 
-    const startTime = Date.now();
+    const startTime = Date.now() - 1; // subtract 1ms to avoid same-tick race
 
     // Write a file after startTime
     const filePath = path.join(outboxDir, "chart.png");
@@ -126,7 +126,7 @@ describe("scanOutbox", () => {
     const outboxDir = path.join(tmpDir, "outbox");
     fs.mkdirSync(outboxDir);
 
-    const startTime = Date.now();
+    const startTime = Date.now() - 1; // subtract 1ms to avoid same-tick race
     fs.writeFileSync(path.join(outboxDir, "a.png"), "img");
     fs.writeFileSync(path.join(outboxDir, "b.pdf"), "doc");
     fs.writeFileSync(path.join(outboxDir, "c.json"), "{}");
