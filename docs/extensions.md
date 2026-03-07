@@ -315,6 +315,10 @@ mercury extensions list    # or: mercury ext list
 
 Shows all installed extensions (user + built-in) with features and descriptions.
 
+## Examples
+
+See [`examples/extensions/`](../examples/extensions/) for complete, working extensions ranging from minimal (charts — CLI + skill) to full-featured (napkin — hooks, jobs, config, widgets, KB distillation).
+
 ## Types
 
 All types are in `src/extensions/types.ts`:
