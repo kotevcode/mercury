@@ -127,20 +127,19 @@ Each space is a user-defined memory boundary with its own workspace and pi sessi
 
 ## Workspaces
 
-Each space gets an Obsidian-compatible workspace:
+Each space gets an isolated workspace:
 
-```
+```text
 .mercury/spaces/<space-id>/
 ├── AGENTS.md              # Space instructions
 ├── .mercury.session.jsonl # pi session
-├── .obsidian/             # Vault marker
-├── entities/              # Memory pages
-├── daily/                 # Daily notes
 ├── inbox/                 # Media received from users
 └── outbox/                # Files produced by the agent
 ```
 
-The agent can read/write files. You can open it in Obsidian. Multiple platform conversations can point at the same space.
+Memory/vault structure (for example `.obsidian/`, `knowledge/`, `daily/`) is created by installed extensions.
+
+Multiple platform conversations can point at the same space.
 
 ---
 
