@@ -3,7 +3,6 @@ import { createTeamsAdapter } from "@chat-adapter/teams";
 import type { Adapter } from "chat";
 import type { AppConfig } from "../config.js";
 import { resolveProjectPath } from "../config.js";
-import { ensureSpaceWorkspace } from "../storage/memory.js";
 import { createDiscordNativeAdapter } from "./discord-native.js";
 import { createWhatsAppBaileysAdapter } from "./whatsapp.js";
 
@@ -68,14 +67,6 @@ export function setupAdapters(config: AppConfig): Record<string, Adapter> {
     adapters.whatsapp = createWhatsAppBaileysAdapter({
       userName: config.botUsername,
       authDir: resolveProjectPath(config.whatsappAuthDir),
-      mediaEnabled: config.mediaEnabled,
-      mediaMaxSizeBytes: config.mediaMaxSizeMb * 1024 * 1024,
-      getGroupWorkspace: (groupId: string) => {
-        return ensureSpaceWorkspace(
-          resolveProjectPath(config.spacesDir),
-          groupId,
-        );
-      },
     });
   }
 

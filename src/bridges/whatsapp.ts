@@ -1,6 +1,12 @@
 import fs from "node:fs";
+import path from "node:path";
+import type { proto, WAMessage } from "@whiskeysockets/baileys";
 import type { Message } from "chat";
 import type { WhatsAppBaileysAdapter } from "../adapters/whatsapp.js";
+import {
+  detectWhatsAppMedia,
+  downloadWhatsAppMedia,
+} from "../adapters/whatsapp-media.js";
 import { logger } from "../logger.js";
 import type {
   EgressFile,
@@ -25,21 +31,43 @@ export class WhatsAppBridge implements PlatformBridge {
   async normalize(
     threadId: string,
     message: unknown,
-    _ctx: NormalizeContext,
+    ctx: NormalizeContext,
     spaceId: string,
   ): Promise<IngressMessage | null> {
-    const msg = message as Message;
+    const msg = message as Message<proto.IWebMessageInfo>;
     if (msg.author.isMe) return null;
 
     const text = msg.text.trim();
     const metadata = msg.metadata as {
-      attachments?: MessageAttachment[];
       isReplyToBot?: boolean;
     };
-    const attachments = Array.isArray(metadata?.attachments)
-      ? metadata.attachments
-      : [];
     const isReplyToBot = metadata?.isReplyToBot ?? false;
+
+    // Download media in the bridge layer (like Discord/Slack) so it lands
+    // in the resolved space workspace, not the raw conversation directory.
+    const attachments: MessageAttachment[] = [];
+    const rawMsg = msg.raw as WAMessage | undefined;
+    const sock = this.adapter.socket;
+
+    if (rawMsg && sock && ctx.media.enabled) {
+      const mediaInfo = detectWhatsAppMedia(rawMsg.message);
+      if (mediaInfo) {
+        const workspace = ctx.getWorkspace(spaceId);
+        try {
+          const attachment = await downloadWhatsAppMedia(rawMsg, sock, {
+            maxSizeBytes: ctx.media.maxSizeBytes,
+            outputDir: workspace,
+          });
+          if (attachment) {
+            attachments.push(attachment);
+          }
+        } catch (error) {
+          logger.error("Failed to download media in bridge", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
 
     if (!text && attachments.length === 0) return null;
 

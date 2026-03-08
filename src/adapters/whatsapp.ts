@@ -29,11 +29,7 @@ import {
   type WebhookOptions,
 } from "chat";
 import { logger } from "../logger.js";
-import type { MessageAttachment } from "../types.js";
-import {
-  detectWhatsAppMedia,
-  downloadWhatsAppMedia,
-} from "./whatsapp-media.js";
+import { detectWhatsAppMedia } from "./whatsapp-media.js";
 
 type WhatsAppThreadId = {
   chatJid: string;
@@ -47,6 +43,7 @@ function extractText(message?: proto.IMessage | null): string {
     message.extendedTextMessage?.text ||
     message.imageMessage?.caption ||
     message.videoMessage?.caption ||
+    message.documentMessage?.caption ||
     ""
   );
 }
@@ -130,23 +127,9 @@ export type WhatsAppQrStatus =
   | { status: "waiting"; qr: string }
   | { status: "disconnected" };
 
-/**
- * Callback for media download. Called when a message with media is received.
- * Returns the group workspace path where media should be saved.
- */
-export type MediaDownloadCallback = (
-  groupId: string,
-) => Promise<string | null> | string | null;
-
 export interface WhatsAppAdapterOptions {
   userName?: string;
   authDir?: string;
-  /** Enable media downloads (default: true) */
-  mediaEnabled?: boolean;
-  /** Max media file size in bytes (default: 10MB) */
-  mediaMaxSizeBytes?: number;
-  /** Callback to get workspace path for media storage */
-  getGroupWorkspace?: MediaDownloadCallback;
 }
 
 export class WhatsAppBaileysAdapter
@@ -167,20 +150,10 @@ export class WhatsAppBaileysAdapter
   private readonly pushNames = new Map<string, string>();
   private currentQr: string | null = null;
 
-  // Media handling
-  private readonly mediaEnabled: boolean;
-  private readonly mediaMaxSizeBytes: number;
-  private readonly getGroupWorkspace?: MediaDownloadCallback;
-
   constructor(options?: WhatsAppAdapterOptions) {
     this.userName = options?.userName ?? "mercury";
     this.authDir =
       options?.authDir ?? path.join(process.cwd(), ".mercury", "whatsapp-auth");
-
-    // Media config
-    this.mediaEnabled = options?.mediaEnabled ?? true;
-    this.mediaMaxSizeBytes = options?.mediaMaxSizeBytes ?? 10 * 1024 * 1024; // 10MB
-    this.getGroupWorkspace = options?.getGroupWorkspace;
   }
 
   /**
@@ -524,45 +497,19 @@ export class WhatsAppBaileysAdapter
       }
     }
 
-    // Detect and download media if enabled
-    const attachments: MessageAttachment[] = [];
+    // Detect media presence (download happens in bridge layer)
     const mediaInfo = detectWhatsAppMedia(msg.message);
+    const hasMedia = mediaInfo !== null;
 
-    if (mediaInfo && this.mediaEnabled && this.sock && this.getGroupWorkspace) {
-      const groupId = this.encodeThreadId({
-        chatJid: remoteJid,
-        threadJid: remoteJid,
-      });
-
-      try {
-        const workspace = await this.getGroupWorkspace(groupId);
-        if (workspace) {
-          const attachment = await downloadWhatsAppMedia(msg, this.sock, {
-            maxSizeBytes: this.mediaMaxSizeBytes,
-            outputDir: workspace,
-          });
-
-          if (attachment) {
-            attachments.push(attachment);
-
-            // Add media description to text if no caption
-            if (!baseText) {
-              const typeLabel =
-                mediaInfo.type === "voice" ? "voice note" : mediaInfo.type;
-              baseText = `[Sent ${typeLabel}]`;
-            }
-          }
-        }
-      } catch (error) {
-        logger.error("Failed to process media", {
-          messageId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+    // Add media description to text if no caption
+    if (hasMedia && !baseText) {
+      const typeLabel =
+        mediaInfo.type === "voice" ? "voice note" : mediaInfo.type;
+      baseText = `[Sent ${typeLabel}]`;
     }
 
     const text = [baseText, replyContext].filter(Boolean).join("\n\n").trim();
-    if (!text && attachments.length === 0) return;
+    if (!text && !hasMedia) return;
 
     const threadId = this.encodeThreadId({
       chatJid: remoteJid,
@@ -574,7 +521,7 @@ export class WhatsAppBaileysAdapter
       sender,
       isReply: Boolean(replyContext),
       isReplyToBot,
-      hasMedia: attachments.length > 0,
+      hasMedia,
       mediaType: mediaInfo?.type,
       preview: text.slice(0, 120),
     });
@@ -600,9 +547,9 @@ export class WhatsAppBaileysAdapter
           Number(msg.messageTimestamp ?? Date.now() / 1000) * 1000,
         ),
         edited: false,
-        // Store attachments and reply flag in metadata for downstream consumers
+        // Store reply flag in metadata for downstream consumers
         // Using spread to add custom properties (not in MessageMetadata type)
-        ...({ attachments, isReplyToBot } as Record<string, unknown>),
+        ...({ isReplyToBot } as Record<string, unknown>),
       },
       attachments: [],
     });

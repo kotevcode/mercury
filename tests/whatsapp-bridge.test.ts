@@ -147,13 +147,10 @@ describe("WhatsAppBridge", () => {
       expect(result).toBeNull();
     });
 
-    test("extracts attachments from metadata", async () => {
+    test("returns empty attachments when raw message has no media", async () => {
       const { adapter } = createMockAdapter();
       const bridge = new WhatsAppBridge(adapter as never);
-      const attachments: MessageAttachment[] = [
-        { path: "/tmp/photo.jpg", type: "image", mimeType: "image/jpeg" },
-      ];
-      const msg = makeMessage({ text: "", metadata: { attachments } });
+      const msg = makeMessage({ text: "hello" });
       const result = await bridge.normalize(
         "whatsapp:group@g.us:group@g.us",
         msg,
@@ -161,7 +158,7 @@ describe("WhatsAppBridge", () => {
         "space1",
       );
       expect(result).not.toBeNull();
-      expect(result?.attachments).toEqual(attachments);
+      expect(result?.attachments).toEqual([]);
     });
 
     test("extracts isReplyToBot from metadata", async () => {
