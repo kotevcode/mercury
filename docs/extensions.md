@@ -86,6 +86,20 @@ mercury.permission({ defaultRoles: ["admin", "member"] });
 
 Can only be called once per extension.
 
+### `mercury.env(def)`
+
+Declare an environment variable this extension needs. Only injected into containers when the caller has permission for this extension. Claimed vars are excluded from the blind `MERCURY_*` passthrough, preventing credential leakage to unprivileged callers.
+
+```typescript
+mercury.env({ from: "MERCURY_GH_TOKEN" });                    // injected as GH_TOKEN
+mercury.env({ from: "MERCURY_GH_TOKEN", as: "GITHUB_TOKEN" }); // custom container name
+```
+
+- `from` — env var name as set in `.env` (e.g. `MERCURY_GH_TOKEN`)
+- `as` — (optional) name inside the container. Defaults to `from` with `MERCURY_` prefix stripped
+
+Can be called multiple times for multiple env vars.
+
 ### `mercury.skill(relativePath)`
 
 Register a skill directory for agent discovery.

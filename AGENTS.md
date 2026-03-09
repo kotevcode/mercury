@@ -209,6 +209,7 @@ import type { MercuryExtensionAPI } from "../extensions/types.js";
 export default function(mercury: MercuryExtensionAPI) {
   mercury.cli({ name: "napkin", install: "bun add -g napkin-ai" });
   mercury.permission({ defaultRoles: ["admin", "member"] });
+  mercury.env({ from: "MERCURY_NAPKIN_API_KEY" });
   mercury.skill("./skill");
   mercury.on("workspace_init", async ({ workspace, containerWorkspace }, ctx) => { ... });
   mercury.job("distill", { interval: 3600_000, run: async (ctx) => { ... } });

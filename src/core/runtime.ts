@@ -158,6 +158,7 @@ export class MercuryCoreRuntime {
         source,
         message.callerId,
         message.attachments,
+        message.authorName,
       );
       return { ...route, result };
     } catch (error) {
@@ -338,6 +339,7 @@ export class MercuryCoreRuntime {
     _source: InputSource,
     callerId: string,
     attachments?: MessageAttachment[],
+    authorName?: string,
   ): Promise<ContainerResult> {
     this.db.ensureSpace(spaceId);
     this.db.addMessage(spaceId, "user", prompt, attachments);
@@ -380,21 +382,24 @@ export class MercuryCoreRuntime {
         }
       }
 
-      // Compute denied extension CLIs for this caller
+      // Compute caller role, denied CLIs, and permitted env vars
+      let callerRole = "member";
       if (this.extensionRegistry) {
+        const seededAdmins = this.config.admins
+          ? this.config.admins
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+        callerRole = resolveRole(this.db, spaceId, callerId, seededAdmins);
+
         const cliExtensions = this.extensionRegistry.getCliExtensions();
         if (cliExtensions.length > 0) {
-          const seededAdmins = this.config.admins
-            ? this.config.admins
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : [];
-          const role = resolveRole(this.db, spaceId, callerId, seededAdmins);
           const denied = cliExtensions
             .filter(
               (ext) =>
-                ext.cli && !hasPermission(this.db, spaceId, role, ext.name),
+                ext.cli &&
+                !hasPermission(this.db, spaceId, callerRole, ext.name),
             )
             .map((ext) => ext.cli!.name);
           if (denied.length > 0) {
@@ -402,6 +407,24 @@ export class MercuryCoreRuntime {
               ...extraEnv,
               MERCURY_DENIED_CLIS: denied.join(","),
             };
+          }
+        }
+
+        // Inject extension env vars only when caller has permission
+        for (const ext of this.extensionRegistry.list()) {
+          if (ext.envVars.length === 0) continue;
+          if (
+            ext.permission &&
+            !hasPermission(this.db, spaceId, callerRole, ext.name)
+          )
+            continue;
+          for (const envDef of ext.envVars) {
+            const value = process.env[envDef.from];
+            if (value) {
+              const containerKey =
+                envDef.as ?? envDef.from.replace(/^MERCURY_/, "");
+              extraEnv = { ...extraEnv, [containerKey]: value };
+            }
           }
         }
       }
@@ -415,8 +438,11 @@ export class MercuryCoreRuntime {
         messages: history,
         prompt,
         callerId,
+        callerRole,
+        authorName,
         attachments,
         extraEnv,
+        claimedEnvSources: this.extensionRegistry?.getClaimedEnvSources(),
       });
 
       const durationMs = Date.now() - startTime;

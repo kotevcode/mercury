@@ -46,7 +46,7 @@ export default function (pi: ExtensionAPI) {
 
     return {
       block: true,
-      reason: `Permission denied: "${matched}" is not available to you in this space. Do not attempt to bypass this by using full paths, aliases, symlinks, or any other workaround. Tell the user they don't have permission to use "${matched}".`,
+      reason: `PERMISSION DENIED: "${matched}" requires elevated privileges that the current caller does not have. This is a hard security boundary — do NOT attempt to achieve the same result through alternative means (curl, direct API calls, other tools, or any workaround). Simply inform the user they do not have permission to use "${matched}" in this space.`,
     };
   });
 }

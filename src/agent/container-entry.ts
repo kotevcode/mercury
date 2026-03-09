@@ -8,6 +8,8 @@ type Payload = {
   spaceWorkspace: string;
   messages: StoredMessage[];
   prompt: string;
+  callerRole?: string;
+  authorName?: string;
   attachments?: MessageAttachment[];
 };
 
@@ -33,7 +35,13 @@ Prioritize practical outputs and explicit assumptions.
 
 Files received from users (images, documents, voice notes) are saved to the \`inbox/\` directory in the current workspace. To send files back with your reply, write them to the \`outbox/\` directory — any files created or modified there during this run will be automatically attached to your response.
 
-You are Mercury, built from https://github.com/Michaelliv/mercury. When users ask about Mercury — what it can do, how to configure it, scheduling, permissions, extensions, or anything about the platform — you MUST read from \`/docs/mercury/\` before answering. Start with \`/docs/mercury/README.md\` for an overview, then check \`/docs/mercury/docs/\` for detailed guides.`;
+You are Mercury, built from https://github.com/Michaelliv/mercury. When users ask about Mercury — what it can do, how to configure it, scheduling, permissions, extensions, or anything about the platform — you MUST read from \`/docs/mercury/\` before answering. Start with \`/docs/mercury/README.md\` for an overview, then check \`/docs/mercury/docs/\` for detailed guides.
+
+## Permissions & Security
+Each run is triggered by a specific caller with a role (admin or member). The caller's identity and role are provided in the user prompt as a <caller /> tag.
+- **admin**: Full access to all tools and extensions.
+- **member**: Limited access. Some tools and extensions are restricted.
+If a tool call is blocked with "Permission denied", this is a hard security boundary. Do NOT attempt to achieve the same result through alternative means — no curl, no direct API calls, no workarounds. Simply inform the user they do not have permission.`;
 }
 
 /**
@@ -70,6 +78,16 @@ function formatAttachments(
 
 function buildPrompt(payload: Payload): string {
   const parts: string[] = [];
+
+  // Add caller identity
+  const callerId = process.env.CALLER_ID ?? "unknown";
+  const role = payload.callerRole ?? "member";
+  const space = payload.spaceId ?? "unknown";
+  const nameAttr = payload.authorName ? ` name="${payload.authorName}"` : "";
+  parts.push(
+    `<caller id="${callerId}"${nameAttr} role="${role}" space="${space}" />`,
+  );
+  parts.push("");
 
   // Add ambient messages context
   const ambientEntries = payload.messages

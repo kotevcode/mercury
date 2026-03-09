@@ -207,6 +207,17 @@ export interface MercuryExtensionAPI {
   permission(opts: PermissionDef): void;
 
   /**
+   * Declare an environment variable this extension needs.
+   * Only injected into containers when the caller has permission for this extension.
+   * Can be called multiple times for multiple env vars.
+   *
+   * @example
+   * mercury.env({ from: "MERCURY_GH_TOKEN" }); // injected as GH_TOKEN
+   * mercury.env({ from: "MERCURY_GH_TOKEN", as: "GITHUB_TOKEN" }); // custom name
+   */
+  env(def: EnvDef): void;
+
+  /**
    * Register a skill directory containing a SKILL.md for agent discovery.
    * Path is relative to the extension directory.
    *
@@ -272,6 +283,14 @@ export interface PermissionDef {
   defaultRoles: string[];
 }
 
+/** Environment variable declaration for an extension. */
+export interface EnvDef {
+  /** Env var name as it appears in .env (e.g. "MERCURY_GH_TOKEN"). */
+  from: string;
+  /** Env var name inside the container (e.g. "GH_TOKEN"). Defaults to `from` with MERCURY_ prefix stripped. */
+  as?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Extension metadata — collected after running the setup function
 // ---------------------------------------------------------------------------
@@ -296,6 +315,8 @@ export interface ExtensionMeta {
   configs: Map<string, ConfigDef>;
   /** Dashboard widgets. */
   widgets: WidgetDef[];
+  /** Declared environment variables. */
+  envVars: EnvDef[];
 }
 
 // ---------------------------------------------------------------------------

@@ -170,6 +170,8 @@ This registers a permission named after the extension (e.g., `napkin`). The beha
 
 Extension CLIs are called directly by the agent in bash. Permission enforcement is handled by a pi extension that blocks denied CLIs at the bash tool level, based on the caller's role and the `MERCURY_DENIED_CLIS` environment variable set by Mercury's runtime.
 
+Extensions that declare env vars via `mercury.env()` also have those vars gated by permission — they are only injected into containers when the caller has the extension's permission. This prevents credential leakage (e.g., a blocked `gh` CLI's `GH_TOKEN` being used via `curl`).
+
 ### API
 
 ```typescript

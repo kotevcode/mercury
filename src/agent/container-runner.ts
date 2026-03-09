@@ -178,8 +178,11 @@ export class AgentContainerRunner {
     messages: StoredMessage[];
     prompt: string;
     callerId: string;
+    callerRole?: string;
+    authorName?: string;
     attachments?: MessageAttachment[];
     extraEnv?: Record<string, string>;
+    claimedEnvSources?: Set<string>;
   }): Promise<ContainerResult> {
     const globalDir = path.resolve(this.config.globalDir);
     const spacesRoot = path.resolve(this.config.spacesDir);
@@ -194,10 +197,13 @@ export class AgentContainerRunner {
 
     // Pass all MERCURY_* vars to container with prefix stripped
     // e.g. MERCURY_ANTHROPIC_API_KEY -> ANTHROPIC_API_KEY
+    const claimed = input.claimedEnvSources;
     const passthroughEnvPairs = Object.entries(process.env)
       .filter(
         (entry): entry is [string, string] =>
-          entry[0].startsWith("MERCURY_") && entry[1] !== undefined,
+          entry[0].startsWith("MERCURY_") &&
+          entry[1] !== undefined &&
+          (!claimed || !claimed.has(entry[0])),
       )
       .map(([key, value]) => ({
         key: key.replace("MERCURY_", ""),
@@ -273,6 +279,8 @@ export class AgentContainerRunner {
     const payload = {
       ...input,
       spaceWorkspace: input.spaceWorkspace.replace(spacesRoot, "/spaces"),
+      callerRole: input.callerRole ?? "member",
+      authorName: input.authorName,
     };
 
     // Create child logger with context for this container run

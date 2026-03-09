@@ -12,6 +12,7 @@ import type { Db } from "../storage/db.js";
 import type {
   CliDef,
   ConfigDef,
+  EnvDef,
   EventHandler,
   ExtensionMeta,
   ExtensionStore,
@@ -37,6 +38,7 @@ export class MercuryExtensionAPIImpl implements MercuryExtensionAPI {
       jobs: new Map(),
       configs: new Map(),
       widgets: [],
+      envVars: [],
     };
   }
 
@@ -67,6 +69,15 @@ export class MercuryExtensionAPIImpl implements MercuryExtensionAPI {
     }
     this.meta.permission = opts;
     registerPermission(this.name, opts);
+  }
+
+  env(def: EnvDef): void {
+    if (!def.from) {
+      throw new Error(
+        `Extension "${this.name}": env() requires a "from" field`,
+      );
+    }
+    this.meta.envVars.push(def);
   }
 
   skill(relativePath: string): void {

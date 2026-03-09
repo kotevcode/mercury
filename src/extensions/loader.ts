@@ -122,6 +122,17 @@ export class ExtensionRegistry {
     return this.list().filter((ext) => ext.cli != null);
   }
 
+  /** Get all env var source names claimed by extensions (for passthrough filtering). */
+  getClaimedEnvSources(): Set<string> {
+    const sources = new Set<string>();
+    for (const ext of this.extensions.values()) {
+      for (const envDef of ext.envVars) {
+        sources.add(envDef.from);
+      }
+    }
+    return sources;
+  }
+
   /** Get all hook handlers for a specific event, across all extensions. */
   getHookHandlers<E extends keyof MercuryEvents>(event: E): EventHandler<E>[] {
     const handlers: EventHandler<E>[] = [];

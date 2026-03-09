@@ -222,6 +222,7 @@ Each extension exports a setup function:
 export default function(mercury) {
   mercury.cli({ name: "napkin", install: "bun add -g napkin-ai" });
   mercury.permission({ defaultRoles: ["admin", "member"] });
+  mercury.env({ from: "MERCURY_NAPKIN_API_KEY" });
   mercury.skill("./skill");
   mercury.on("workspace_init", async ({ workspace, containerWorkspace }) => { ... });
   mercury.on("before_container", async ({ workspace, containerWorkspace }) => {
