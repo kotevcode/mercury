@@ -93,6 +93,20 @@ export interface SpaceConfigEntry {
   updatedAt: number;
 }
 
+export type BlacklistSource = "admin" | "automatic";
+
+export interface BlacklistEntry {
+  spaceId: string;
+  platformUserId: string;
+  strikeCount: number;
+  source: BlacklistSource;
+  reason: string | null;
+  expiresAt: number | null;
+  noticeSentAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type TriggerMatch = "prefix" | "mention" | "always";
 
 export interface TriggerConfig {

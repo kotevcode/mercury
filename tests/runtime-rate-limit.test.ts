@@ -227,4 +227,68 @@ describe("Runtime rate limiting", () => {
     const r3 = await runtime.handleRawInput(triggeredMessage, "chat-sdk");
     expect(r3.type).toBe("assistant");
   });
+
+  test("rate limit escalates to timed punishment when blacklist is enabled", async () => {
+    const message = {
+      platform: "test",
+      spaceId: "test-group",
+      text: "@Pi hello",
+      callerId: "user1",
+      isDM: false,
+      isReplyToBot: false,
+      attachments: [],
+    };
+
+    runtime.db.ensureSpace("test-group");
+    runtime.db.setSpaceConfig("test-group", "blacklist.enabled", "true", "test");
+
+    await runtime.handleRawInput(message, "chat-sdk");
+    await runtime.handleRawInput(message, "chat-sdk");
+    await runtime.handleRawInput(message, "chat-sdk");
+
+    const denied = await runtime.handleRawInput(message, "chat-sdk");
+    expect(denied.type).toBe("denied");
+    if (denied.type === "denied") {
+      expect(denied.reason).toBe("You are being punished for 1 hour.");
+    }
+
+    const followUp = await runtime.handleRawInput(message, "chat-sdk");
+    expect(followUp.type).toBe("ignore");
+
+    const entry = runtime.db.getBlacklistEntry("test-group", "user1");
+    expect(entry?.strikeCount).toBe(1);
+    expect(entry?.source).toBe("automatic");
+  });
+
+  test("repeat automatic punishment escalates to permanent ghosting", async () => {
+    const message = {
+      platform: "test",
+      spaceId: "test-group",
+      text: "@Pi hello",
+      callerId: "user1",
+      isDM: false,
+      isReplyToBot: false,
+      attachments: [],
+    };
+
+    runtime.db.ensureSpace("test-group");
+    runtime.db.setSpaceConfig("test-group", "blacklist.enabled", "true", "test");
+    runtime.db.upsertBlacklistEntry("test-group", "user1", {
+      strikeCount: 2,
+      source: "automatic",
+      expiresAt: Date.now() - 1,
+      noticeSentAt: Date.now() - 1,
+    });
+
+    await runtime.handleRawInput(message, "chat-sdk");
+    await runtime.handleRawInput(message, "chat-sdk");
+    await runtime.handleRawInput(message, "chat-sdk");
+
+    const denied = await runtime.handleRawInput(message, "chat-sdk");
+    expect(denied.type).toBe("ignore");
+
+    const entry = runtime.db.getBlacklistEntry("test-group", "user1");
+    expect(entry?.strikeCount).toBe(3);
+    expect(entry?.expiresAt).toBeNull();
+  });
 });

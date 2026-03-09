@@ -54,6 +54,7 @@ Built-in commands:
   mrctl config get|set
   mrctl roles list|grant|revoke
   mrctl permissions show|set
+  mrctl blacklist list|punish|clear
   mrctl spaces list|name|delete
   mrctl conversations list
   mrctl stop
@@ -216,6 +217,47 @@ async function main() {
         }
         default:
           fatal(`Unknown permissions subcommand: ${sub}`);
+      }
+      break;
+    }
+
+    case "blacklist": {
+      if (!sub) usage();
+      switch (sub) {
+        case "list":
+          print(await api("GET", "/api/blacklist"));
+          break;
+        case "punish": {
+          const userId = requireArg(args, 2, "platform-user-id");
+          const levelValue = parseFlag(args, "--level");
+          const reason = parseFlag(args, "--reason");
+          const level = levelValue
+            ? Number.parseInt(levelValue, 10)
+            : undefined;
+          if (levelValue && Number.isNaN(level)) {
+            fatal(`Invalid --level: ${levelValue}`);
+          }
+          print(
+            await api("POST", "/api/blacklist", {
+              platformUserId: userId,
+              level,
+              reason,
+            }),
+          );
+          break;
+        }
+        case "clear": {
+          const userId = requireArg(args, 2, "platform-user-id");
+          print(
+            await api(
+              "DELETE",
+              `/api/blacklist/${encodeURIComponent(userId)}`,
+            ),
+          );
+          break;
+        }
+        default:
+          fatal(`Unknown blacklist subcommand: ${sub}`);
       }
       break;
     }

@@ -17,6 +17,11 @@ import type {
   MessageAttachment,
   MessageSender,
 } from "../types.js";
+import {
+  applyBlacklistPenalty,
+  getActiveBlacklist,
+  isBlacklistEnabled,
+} from "./blacklist.js";
 import { compactSession } from "./compact.js";
 import { hasPermission, resolveRole } from "./permissions.js";
 import { RateLimiter } from "./rate-limiter.js";
@@ -128,6 +133,28 @@ export class MercuryCoreRuntime {
         effectiveLimit > 0 &&
         !this.checkRateLimit(message.spaceId, message.callerId, effectiveLimit)
       ) {
+        if (isBlacklistEnabled(this.db, message.spaceId)) {
+          const penaltyEntry = applyBlacklistPenalty(
+            this.db,
+            message.spaceId,
+            message.callerId,
+            { source: "automatic", reason: "Exceeded rate limit" },
+          );
+          const blacklist = getActiveBlacklist(
+            this.db,
+            message.spaceId,
+            message.callerId,
+            penaltyEntry,
+          );
+          if (blacklist?.shouldReply && blacklist.message) {
+            return {
+              type: "denied",
+              reason: blacklist.message,
+            };
+          }
+          return { type: "ignore" };
+        }
+
         return {
           type: "denied",
           reason: "Rate limit exceeded. Try again shortly.",

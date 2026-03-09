@@ -1,3 +1,4 @@
+export { blacklist } from "./blacklist.js";
 export { config } from "./config.js";
 export { control } from "./control.js";
 export { conversations } from "./conversations.js";

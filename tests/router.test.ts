@@ -132,6 +132,66 @@ describe("routeInput — permission gating", () => {
   });
 });
 
+describe("routeInput — blacklist gating", () => {
+  test("inactive when feature toggle is off", () => {
+    db.ensureSpace("g1");
+    db.upsertBlacklistEntry("g1", "user1", {
+      strikeCount: 1,
+      source: "admin",
+      expiresAt: Date.now() + 60_000,
+      noticeSentAt: null,
+    });
+
+    const r = route({ callerId: "user1" });
+    expect(r.type).toBe("assistant");
+  });
+
+  test("first active punishment replies once", () => {
+    db.ensureSpace("g1");
+    db.setSpaceConfig("g1", "blacklist.enabled", "true", "admin1");
+    db.upsertBlacklistEntry("g1", "user1", {
+      strikeCount: 1,
+      source: "admin",
+      expiresAt: Date.now() + 60_000,
+      noticeSentAt: null,
+    });
+
+    const r = route({ callerId: "user1" });
+    expect(r.type).toBe("denied");
+    if (r.type === "denied") {
+      expect(r.reason).toBe("You are being punished for 1 hour.");
+    }
+  });
+
+  test("active punishment ghosts after notice is sent", () => {
+    db.ensureSpace("g1");
+    db.setSpaceConfig("g1", "blacklist.enabled", "true", "admin1");
+    db.upsertBlacklistEntry("g1", "user1", {
+      strikeCount: 2,
+      source: "admin",
+      expiresAt: Date.now() + 60_000,
+      noticeSentAt: Date.now(),
+    });
+
+    const r = route({ callerId: "user1" });
+    expect(r.type).toBe("ignore");
+  });
+
+  test("third strike is immediately ghosted", () => {
+    db.ensureSpace("g1");
+    db.setSpaceConfig("g1", "blacklist.enabled", "true", "admin1");
+    db.upsertBlacklistEntry("g1", "user1", {
+      strikeCount: 3,
+      source: "admin",
+      expiresAt: null,
+      noticeSentAt: null,
+    });
+
+    const r = route({ callerId: "user1" });
+    expect(r.type).toBe("ignore");
+  });
+});
+
 describe("routeInput — chat commands", () => {
   test("admin can execute stop command", () => {
     const r = route({ text: "@Pi stop" });

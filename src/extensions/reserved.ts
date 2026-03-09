@@ -8,6 +8,7 @@ export const RESERVED_EXTENSION_NAMES = new Set([
   "tasks",
   "roles",
   "permissions",
+  "blacklist",
   "config",
   "spaces",
   "conversations",

@@ -1,5 +1,6 @@
 import type { AppConfig } from "../config.js";
 import type { Db } from "../storage/db.js";
+import { getActiveBlacklist, isBlacklistEnabled } from "./blacklist.js";
 import { hasPermission, resolveRole } from "./permissions.js";
 import { loadTriggerConfig, matchTrigger } from "./trigger.js";
 
@@ -46,6 +47,20 @@ export function routeInput(input: {
     input.callerId,
     seededAdmins,
   );
+
+  if (isBlacklistEnabled(input.db, input.spaceId)) {
+    const blacklist = getActiveBlacklist(
+      input.db,
+      input.spaceId,
+      input.callerId,
+    );
+    if (blacklist) {
+      if (blacklist.shouldReply && blacklist.message) {
+        return { type: "denied", reason: blacklist.message };
+      }
+      return { type: "ignore" };
+    }
+  }
 
   // Load trigger config for this group
   const defaultPatterns = input.config.triggerPatterns

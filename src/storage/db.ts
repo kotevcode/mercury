@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import type {
+  BlacklistEntry,
   Conversation,
   MessageAttachment,
   ScheduledTask,
@@ -141,6 +142,22 @@ export class Db {
         updated_at INTEGER NOT NULL,
         PRIMARY KEY (extension, key)
       );
+
+      CREATE TABLE IF NOT EXISTS blacklist (
+        space_id TEXT NOT NULL,
+        platform_user_id TEXT NOT NULL,
+        strike_count INTEGER NOT NULL,
+        source TEXT NOT NULL,
+        reason TEXT,
+        expires_at INTEGER,
+        notice_sent_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (space_id, platform_user_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_blacklist_space_expires
+      ON blacklist(space_id, expires_at);
     `);
   }
 
@@ -258,6 +275,7 @@ export class Db {
       tasks: number;
       chatState: number;
       roles: number;
+      blacklist: number;
       config: number;
       conversationsUnlinked: number;
     };
@@ -275,6 +293,9 @@ export class Db {
         .run(spaceId).changes;
       const roles = this.db
         .query("DELETE FROM space_roles WHERE space_id = ?")
+        .run(spaceId).changes;
+      const blacklist = this.db
+        .query("DELETE FROM blacklist WHERE space_id = ?")
         .run(spaceId).changes;
       const config = this.db
         .query("DELETE FROM space_config WHERE space_id = ?")
@@ -296,6 +317,7 @@ export class Db {
           tasks,
           chatState,
           roles,
+          blacklist,
           config,
           conversationsUnlinked: Number(conversationsUnlinked?.count ?? 0),
         },
@@ -866,6 +888,128 @@ export class Db {
          ORDER BY key ASC`,
       )
       .all(spaceId) as SpaceConfigEntry[];
+  }
+
+  // --- Blacklist ---
+
+  getBlacklistEntry(
+    spaceId: string,
+    platformUserId: string,
+  ): BlacklistEntry | null {
+    return this.db
+      .query(
+        `SELECT
+           space_id as spaceId,
+           platform_user_id as platformUserId,
+           strike_count as strikeCount,
+           source,
+           reason,
+           expires_at as expiresAt,
+           notice_sent_at as noticeSentAt,
+           created_at as createdAt,
+           updated_at as updatedAt
+         FROM blacklist
+         WHERE space_id = ? AND platform_user_id = ?`,
+      )
+      .get(spaceId, platformUserId) as BlacklistEntry | null;
+  }
+
+  listBlacklist(spaceId: string): BlacklistEntry[] {
+    return this.db
+      .query(
+        `SELECT
+           space_id as spaceId,
+           platform_user_id as platformUserId,
+           strike_count as strikeCount,
+           source,
+           reason,
+           expires_at as expiresAt,
+           notice_sent_at as noticeSentAt,
+           created_at as createdAt,
+           updated_at as updatedAt
+         FROM blacklist
+         WHERE space_id = ?
+         ORDER BY updated_at DESC, platform_user_id ASC`,
+      )
+      .all(spaceId) as BlacklistEntry[];
+  }
+
+  upsertBlacklistEntry(
+    spaceId: string,
+    platformUserId: string,
+    input: {
+      strikeCount: number;
+      source: BlacklistEntry["source"];
+      reason?: string | null;
+      expiresAt?: number | null;
+      noticeSentAt?: number | null;
+    },
+  ): BlacklistEntry {
+    const now = Date.now();
+    this.db
+      .query(
+        `INSERT INTO blacklist(
+           space_id,
+           platform_user_id,
+           strike_count,
+           source,
+           reason,
+           expires_at,
+           notice_sent_at,
+           created_at,
+           updated_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(space_id, platform_user_id)
+         DO UPDATE SET
+           strike_count = excluded.strike_count,
+           source = excluded.source,
+           reason = excluded.reason,
+           expires_at = excluded.expires_at,
+           notice_sent_at = excluded.notice_sent_at,
+           updated_at = excluded.updated_at`,
+      )
+      .run(
+        spaceId,
+        platformUserId,
+        input.strikeCount,
+        input.source,
+        input.reason ?? null,
+        input.expiresAt ?? null,
+        input.noticeSentAt ?? null,
+        now,
+        now,
+      );
+
+    const entry = this.getBlacklistEntry(spaceId, platformUserId);
+    if (!entry) {
+      throw new Error(
+        `Failed to load blacklist entry ${spaceId}:${platformUserId}`,
+      );
+    }
+    return entry;
+  }
+
+  markBlacklistNoticeSent(spaceId: string, platformUserId: string): boolean {
+    const now = Date.now();
+    const result = this.db
+      .query(
+        `UPDATE blacklist
+         SET notice_sent_at = ?, updated_at = ?
+         WHERE space_id = ? AND platform_user_id = ? AND notice_sent_at IS NULL`,
+      )
+      .run(now, now, spaceId, platformUserId);
+    return result.changes > 0;
+  }
+
+  deleteBlacklistEntry(spaceId: string, platformUserId: string): boolean {
+    const result = this.db
+      .query(
+        `DELETE FROM blacklist
+         WHERE space_id = ? AND platform_user_id = ?`,
+      )
+      .run(spaceId, platformUserId);
+    return result.changes > 0;
   }
 
   // --- Extension State ---

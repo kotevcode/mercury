@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { ApiContext, AuthContext, Env } from "./api-types.js";
 import { resolveRole } from "./permissions.js";
 import {
+  blacklist,
   config,
   control,
   conversations,
@@ -55,6 +56,7 @@ export function createApiApp(apiCtx: ApiContext): Hono<Env> {
   app.route("/config", config);
   app.route("/roles", roles);
   app.route("/permissions", permissions);
+  app.route("/blacklist", blacklist);
   app.route("/spaces", spaces);
   app.route("/conversations", conversations);
   app.route("/ext", extensions);

@@ -635,6 +635,69 @@ describe("PUT /api/permissions", () => {
   });
 });
 
+describe("Blacklist API", () => {
+  test("admin can create and list blacklist entries", async () => {
+    const created = await api("POST", "/api/blacklist", {
+      body: {
+        platformUserId: "user1",
+        reason: "spam",
+      },
+    });
+    expect(created.status).toBe(200);
+
+    const list = await api("GET", "/api/blacklist");
+    expect(list.status).toBe(200);
+    const entries = list.data.entries as Array<{
+      platformUserId: string;
+      strikeCount: number;
+      source: string;
+    }>;
+    expect(entries.length).toBe(1);
+    expect(entries[0]).toMatchObject({
+      platformUserId: "user1",
+      strikeCount: 1,
+      source: "admin",
+    });
+  });
+
+  test("admin can set permanent ghosting directly", async () => {
+    const { status, data } = await api("POST", "/api/blacklist", {
+      body: {
+        platformUserId: "user1",
+        level: 3,
+      },
+    });
+    expect(status).toBe(200);
+    const entry = data.entry as {
+      strikeCount: number;
+      expiresAt: number | null;
+    };
+    expect(entry.strikeCount).toBe(3);
+    expect(entry.expiresAt).toBeNull();
+  });
+
+  test("member cannot manage blacklist", async () => {
+    const { status } = await api("POST", "/api/blacklist", {
+      callerId: "user1",
+      body: { platformUserId: "user2" },
+    });
+    expect(status).toBe(403);
+  });
+
+  test("admin can clear blacklist entry", async () => {
+    await api("POST", "/api/blacklist", {
+      body: { platformUserId: "user1" },
+    });
+
+    const cleared = await api("DELETE", "/api/blacklist/user1");
+    expect(cleared.status).toBe(200);
+    expect(cleared.data.cleared).toBe(true);
+
+    const list = await api("GET", "/api/blacklist");
+    expect(list.data.entries).toEqual([]);
+  });
+});
+
 // ─── Stop ─────────────────────────────────────────────────────────────────
 
 describe("POST /api/stop", () => {
