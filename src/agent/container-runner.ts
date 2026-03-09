@@ -230,6 +230,7 @@ export class AgentContainerRunner {
       { key: "HOME", value: "/root" },
       { key: "PI_CODING_AGENT_DIR", value: "/root/.pi/agent" },
       { key: "CALLER_ID", value: input.callerId },
+      { key: "SYSTEM_CALLER_ID", value: "system" },
       { key: "SPACE_ID", value: input.spaceId },
       {
         key: "API_URL",
